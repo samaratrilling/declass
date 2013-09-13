@@ -7,9 +7,9 @@ from functools import partial
 import sys
 from collections import Counter
 
-from jrl_utils.src import common, parallel_easy, nlp
-from trec_2010.src import filefilter
-from trec_2010.src import text_processors
+from declass.declass import filefilter, text_processors, nlp
+
+from jrl_utils.src import parallel_easy
 
 
 def _cli():
@@ -17,8 +17,14 @@ def _cli():
     epilog = """
     EXAMPLES
 
-    Pass the first 10 entries in mydir/ as the path_list
-    $ find mydir/ -type f | head | python tokenizer.py
+    Convert file1 and file2 to vw format, redirect to my_vw_file
+    $ python files_to_vw.py file1 file2 > my_vw_file
+
+    Convert all files in mydir/ to vw format
+    $ python files_to_vw.py  --base_path=mydir
+
+    Convert the first 10 files in mydir/ to vw format 
+    $ find mydir/ -type f | head | python files_to_vw.py
 
     Vowpal Wabbit format is:
 
@@ -51,7 +57,7 @@ def _cli():
         type=int, default=1)
     parser.add_argument(
         '--chunksize', help="Have workers process CHUNKSIZE files at a time.",
-        type=int, default=50)
+        type=int, default=1000)
 
     # Parse and check args
     args = parser.parse_args()
@@ -76,7 +82,12 @@ def tokenize(
     if base_path:
         path_list = filefilter.get_paths(base_path, fileType='*')
 
-    func = partial(_tokenize_one, tokenizer_type)
+    tokenizer_dict = {'basic': text_processors.TokenizerBasic}
+    tokenizer = tokenizer_dict[tokenizer_type]()
+
+    formatter = text_processors.VWFormatter()
+
+    func = partial(_tokenize_one, tokenizer, formatter)
 
     results_iterator = parallel_easy.imap_easy(
         func, path_list, n_jobs, chunksize)
@@ -85,7 +96,7 @@ def tokenize(
         outfile.write(result + '\n')
 
 
-def _tokenize_one(tokenizer_type, path):
+def _tokenize_one(tokenizer, formatter, path):
     """
     Tokenize file contained in path.  Return results in a sparse format.
     """
@@ -93,65 +104,15 @@ def _tokenize_one(tokenizer_type, path):
     path = path.strip()
     text = open(path, 'rb').read()
 
-    # Extract raw tokens as an iterable over pairs
-    # (word1, value1),...
-    # E.g. the dict {'word1': value1, 'word2': value2}
-    # 
-    # To use a cutom tokenizer, write a function and add to the dict
-    # tokenizer_funcs
-    tokenizer_funcs = {'basic': _get_tokens_basic}
-    tokens = tokenizer_funcs[tokenizer_type](text)
+    tokens = tokenizer.text_to_counter(text)
 
     # Format
-    tok_str = _format_vw(tokens, tag=filefilter.get_one_file_name(path))
+    rec_name = filefilter.get_one_file_name(path)
+    tok_str = formatter.write_str(tokens, rec_name=rec_name)
 
     return tok_str
 
 
-def _format_vw(tokens, tag=''):
-    """
-    Return a string reprsenting one record in VW format:
-    [label] [weight] ['tag] | feature1:score1 feature2:score2 ...
-
-    Notes
-    -----
-    Pipes, spaces, and colons are special characters.  
-    A single-quote is special before the pipe.  
-    These should NOT be in your tokens.
-    """
-    vw_str = "'%s |" % (tag)
-
-    for word, count in tokens.iteritems():
-        vw_str += " %s:%s" % (word, count)
-
-    return vw_str
-
-
-def _get_tokens_basic(text):
-    """
-    Basic tokenizer.  
-
-    Parameters
-    ----------
-    text : String
-
-    Returns
-    -------
-    tokens : Counter
-        keys = the tokens
-        values = counts of the tokens in text
-
-    Notes
-    -----
-    Keeps only non-stopwords, converts to lowercase, keeps words of length >=2.
-    """
-    tokens = nlp.word_tokenize(text, L=2, numeric=False)
-    tokens = Counter(
-        word.lower() for word in tokens if word not in nlp.stopwords_eng)
-    
-    return tokens
-
-    
 
 if __name__ == '__main__':
     _cli()
