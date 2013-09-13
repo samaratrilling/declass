@@ -1,6 +1,9 @@
 # Excess python files
 *.py[cod]
 
+# IPython
+notebooks/.ipynb_checkpoints/*
+
 #ignore data folder
 **/data
 data/
