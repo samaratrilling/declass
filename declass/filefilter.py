@@ -45,23 +45,41 @@ def get_paths(dirName, fileType="*", relative=False):
     return path_list
 
 
-def get_one_file_name(path):
+def path_to_name(path, name_level=1):
     """
-    Takes one path and returns the filename, excluding the extension.
+    Takes one path and returns a name.
 
     Parameters
     ----------
     path : String
+    name_level : Integer
+        Form the name using items this far back in the path.  E.g. if
+        path = mydata/1234/3.txt and name_level == 2, then name = 1234_3
 
     Returns
     -------
-    filename : String
+    name : String
     """
-    head, tail = os.path.split(path)
-    filename, ext = os.path.splitext(tail)
+    name_plus_ext = path.split('/')[-name_level:]
+    name, ext = os.path.splitext('_'.join(name_plus_ext))
 
-    return filename
-
-
+    return name
 
 
+def paths_to_files(path_list, mode='r'):
+    """
+    Returns an iterator that opens files in path_list.
+
+    Parameters
+    ----------
+    path_list : List of Strings
+    mode : String
+        mode to open the files in
+
+    Returns
+    -------
+    file_iter : Iterable
+        file_iter.next() gives the next open file.
+    """
+    for path in path_list:
+        yield open(path.strip(), mode=mode)

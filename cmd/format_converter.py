@@ -55,8 +55,8 @@ def convert(infile, outfile, from_format, to_format):
 
     for line in infile:
         line = line.strip()
-        line_dict = from_formatter.write_dict(line)
-        output = to_formatter.write_str(line_dict)
+        line_dict = from_formatter.get_dict(line)
+        output = to_formatter.get_str(line_dict)
 
         outfile.write(output + '\n')
 
