@@ -15,12 +15,19 @@ def _cli():
     # Text to display after help
     epilog = """
     EXAMPLES
+
+    Convert mydata-vw to mydata-svmlight
+    $ python format_converter.py -f vw -t svmlight mydata-vw > mydata-svmlight 
+
+    Put in a pipeline with files_to_vw.py
+    $ python files_to_vw.py --base_path=mydata \
+        | python format_converter.py -f vw -t svmlight > mydata-svmlight
     """
     parser = argparse.ArgumentParser(
         description=globals()['__doc__'], epilog=epilog,
         formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument(
-        'infile', nargs=1, type=argparse.FileType('r'), default=sys.stdin,
+        'infile', nargs='?', type=argparse.FileType('r'), default=sys.stdin,
         help='Convert infile rather than reading from sys.stdin'
         )
     parser.add_argument(
@@ -38,8 +45,7 @@ def _cli():
     args = parser.parse_args()
 
     # Call the module interface
-    infile = args.infile[0]
-    convert(infile, args.outfile, args.from_format, args.to_format)
+    convert(args.infile, args.outfile, args.from_format, args.to_format)
 
 
 def convert(infile, outfile, from_format, to_format):
@@ -54,9 +60,9 @@ def convert(infile, outfile, from_format, to_format):
     to_formatter = formatter_dict[to_format]()
 
     for line in infile:
-        line = line.strip()
+        line = line.rstrip('\n').rstrip('\r')
         line_dict = from_formatter.get_dict(line)
-        output = to_formatter.get_str(line_dict)
+        output = to_formatter.get_str(**line_dict)
 
         outfile.write(output + '\n')
 

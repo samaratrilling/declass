@@ -42,7 +42,7 @@ def _cli():
         '--base_path', dest='base_path', 
         help='Walk this directory for documents.')
     parser.add_argument(
-        'files', nargs='*', type=argparse.FileType('r'), default=sys.stdin,
+        'paths', nargs='*',
         help='Convert files in this space separated list.  If not specified,'
         ' use base_path or read paths from stdin.')
     parser.add_argument(
@@ -67,31 +67,28 @@ def _cli():
     # Parse and check args
     args = parser.parse_args()
 
-    if args.base_path and (args.files == sys.stdin):
-        args.files = None
-    # Convert the stream of paths coming to sys.stdin to a stream of open
-    # files.
-    if args.files == sys.stdin:
-        args.files = filefilter.paths_to_files(args.files, mode='r')
+    if args.base_path:
+        assert args.paths == []
+    elif args.paths == []:
+        args.paths = sys.stdin
 
     # Call the module interface
     tokenize(
-        args.outfile, files=args.files, base_path=args.base_path,
+        args.outfile, paths=args.paths, base_path=args.base_path,
         tokenizer_type=args.tokenizer_type, name_level=args.name_level, 
         n_jobs=args.n_jobs, chunksize=args.chunksize)
 
 
 def tokenize(
-    outfile, files=None, base_path=None, tokenizer_type='basic',
+    outfile, paths=None, base_path=None, tokenizer_type='basic',
     name_level=1, n_jobs=1, chunksize=50):
     """
     Write later if module interface is needed. See _cli for the documentation.
     """
-    assert not (files and base_path)
+    assert not (paths and base_path)
 
     if base_path:
-        path_list = filefilter.get_paths(base_path, fileType='*')
-        files = filefilter.paths_to_files(path_list, mode='r')
+        paths = filefilter.get_paths(base_path, fileType='*')
 
     tokenizer_dict = {'basic': text_processors.TokenizerBasic}
     tokenizer = tokenizer_dict[tokenizer_type]()
@@ -101,20 +98,20 @@ def tokenize(
     func = partial(_tokenize_one, tokenizer, formatter, name_level)
 
     results_iterator = parallel_easy.imap_easy(
-        func, files, n_jobs, chunksize)
+        func, paths, n_jobs, chunksize)
 
     for result in results_iterator:
         outfile.write(result + '\n')
 
 
-def _tokenize_one(tokenizer, formatter, name_level, ofile):
+def _tokenize_one(tokenizer, formatter, name_level, path):
     """
     Tokenize file contained in path.  Return results in a sparse format.
     """
     # If path comes from find (and a pipe to stdin), there will be newlines.
-    path = ofile.name
-    text = ofile.read()
-    ofile.close()
+    path = path.strip()
+    with open(path, 'r') as f:
+        text = f.read()
 
     tokens = tokenizer.text_to_counter(text)
 
