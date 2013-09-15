@@ -116,12 +116,15 @@ class DBCONNECT(object):
 
     Example
     -------
-    dbCon = DBCONNECT(host_name='mysql.csail.mit.edu', db_name='declassification', user_name='declass', pwd='declass')
+    dbCon = DBCONNECT(host_name='mysql.csail.mit.edu', 
+            db_name='declassification', user_name='declass', pwd='declass')
     table_name = 'declassification'
     doc_id = 242518
     fields = 'body, title'
-    doc = dbCon.get_row_by_id(row_id=doc_id, table_name=table_name, fields=fields)
-    doc_list = dbCon.get_rows_by_idlist(id_list=[242518, 317509], table_name=table_name, fields=fields)
+    doc = dbCon.get_row_by_id(row_id=doc_id, table_name=table_name, 
+            fields=fields)
+    doc_list = dbCon.get_rows_by_idlist(id_list=[242518, 317509], 
+            table_name=table_name, fields=fields)
 
     Notes
     -----
@@ -151,6 +154,10 @@ class DBCONNECT(object):
         table_name : string
         fields : string
             format = 'field1, field2, ...'; default is all fields
+
+        Returns
+        -------
+        output : list 
         
         Notes
         -----
@@ -170,6 +177,10 @@ class DBCONNECT(object):
         table_name : string
         fields : string
             format = 'field1, field2, ...'; default is all fields
+
+        Returns
+        -------
+        output_list : list 
         
         Notes
         -----
@@ -182,6 +193,35 @@ class DBCONNECT(object):
             fields=fields)) for row_id in id_list]
         return output_list
         
+    def get_table_names(self):
+        """
+        Fetches all table names in the DB.
+
+        Returns
+        -------
+        output : list of strings
+        """
+        sql = 'show tables'
+        self.cursor.execute(sql)
+        temp_output = self.cursor.fetchall()
+        output = [entry[0] for entry in temp_output]
+        return output
+
+    def get_column_info(self, table_name):
+        """
+        Fetches all column names and type for a given table
+
+        Returns
+        -------
+        output : list of tuples (column_name, column_type)
+        """
+        sql = 'show columns from %s'%table_name
+        self.cursor.execute(sql)
+        temp_output = self.cursor.fetchall()
+        output = [entry[:2] for entry in temp_output]
+        return output
+
+
     def close(self):
         """
         Closes the mysql connection.
@@ -201,9 +241,13 @@ if __name__ == '__main__':
     doc_id = 242518
     fields = 'body, title'
     doc = dbCon.get_row_by_id(row_id=doc_id, table_name=table_name, fields=fields)
-    print doc
+    #print doc
     doc_list = dbCon.get_rows_by_idlist(id_list=[242518, 317509], table_name=table_name, fields=fields)
-    print doc_list
+    #print doc_list
+    table_names = dbCon.get_table_names()
+    print table_names
+    column_info = dbCon.get_column_info(table_name='Document')
+    print column_info
     dbCon.close()
 
 
