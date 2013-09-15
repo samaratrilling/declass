@@ -94,9 +94,9 @@ class DBCONNECT(object):
         user_name : string
         pwd : string
         """
-        conn = pymysql.connect(host=host_name, user=user_name, passwd=pwd, db=db_name)
-        self.cursor = conn.cursor()
-        conn.autocommit(1)
+        self.conn = pymysql.connect(host=host_name, user=user_name, passwd=pwd, db=db_name)
+        self.cursor = self.conn.cursor()
+        self.conn.autocommit(1)
 
     def get_row_by_id(self, row_id, table_name, fields='*'):
         """
@@ -137,6 +137,15 @@ class DBCONNECT(object):
             fields=fields)) for row_id in id_list]
         return output_list
         
+    def close(self):
+        """
+        Closes the mysql connection.
+
+        Notes
+        -----
+        Not strictly necessary, but good practice to close sesssion after use.
+        """
+        self.conn.close()
               
     
 
@@ -150,6 +159,7 @@ if __name__ == '__main__':
     print doc
     doc_list = dbCon.get_rows_by_idlist(id_list=[242518, 317509], table_name=table_name, fields=fields)
     print doc_list
+    dbCon.close()
 
 
     
