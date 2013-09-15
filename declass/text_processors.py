@@ -1,4 +1,5 @@
 from collections import Counter
+from functools import partial
 
 from . import filefilter, nlp, common
 
@@ -6,10 +7,14 @@ from . import filefilter, nlp, common
 class TokenizerBasic(object):
     """
     A simple tokenizer.  Extracts word counts from text.
+
+    Keeps only non-stopwords, converts to lowercase,
+    keeps words of length >=2.
     """
     def text_to_counter(self, text):
         """
-        Basic tokenizer.  
+        Return a counter associated to tokens in text.  
+        Filter/transform words according to the scheme this Tokenizer uses.
 
         Parameters
         ----------
@@ -20,17 +25,46 @@ class TokenizerBasic(object):
         tokens : Counter
             keys = the tokens
             values = counts of the tokens in text
+        """
+        return Counter(self.text_to_token_list(text))
+        
+    def text_to_token_list(self, text):
+        """
+        Return a list of tokens.  
+        Filter/transform words according to the scheme this Tokenizer uses.
 
-        Notes
-        -----
-        Keeps only non-stopwords, converts to lowercase,
-        keeps words of length >=2.
+        Parameters
+        ----------
+        text : String
+
+        Returns
+        -------
+        tokens : List
+            Tokenized text, e.g. ['hello', 'my', 'name', 'is', 'ian']
         """
         tokens = nlp.word_tokenize(text, L=2, numeric=False)
-        tokens = Counter(
-            word.lower() for word in tokens if not nlp.is_stopword(word))
-        
-        return tokens
+
+        return [word for word in tokens if not nlp.is_stopword(word)]
+
+    def path_to_token_list(self, path):
+        """
+        Return a list of tokens.  
+        Filter/transform words according to the scheme this Tokenizer uses.
+
+        Parameters
+        ----------
+        path : String
+            Path to a file to read
+
+        Returns
+        -------
+        tokens : List
+            Tokenized text, e.g. ['hello', 'my', 'name', 'is', 'ian']
+        """
+        with open(path, 'r') as f:
+            text = f.read()
+
+        return self.text_to_token_list(text)
 
 
 class SparseFormatter(object):
@@ -271,4 +305,61 @@ class SVMLightFormatter(SparseFormatter):
 
     def _parse_preamble(self, preamble):
         return {'target': float(preamble)}
+
+
+def path_to_token_list(tokenizer, path):
+    return tokenizer.path_to_token_list(path)
+
+
+class TokenStreamer(object):
+    """
+    Streams tokens from a source of text files.
+    """
+    def __init__(
+        self, tokenizer, base_path=None, file_type='*', paths=None,
+        limit=None):
+        """
+        Parameters
+        ----------
+        tokenizer : text_processors.Tokenizer object
+            Used to create streams of tokens
+        base_path : String
+            The base directory.  Get all files of file_type within this.
+        file_type : String
+            Glob filter on the file, e.g. '*.txt'
+        paths : Iterable
+            E.g. a list of paths.
+        limit : Integer
+            Raise StopIteration after returning limit token lists.
+        """
+        self.tokenizer = tokenizer
+        self.base_path = base_path
+        self.file_type = file_type
+        self.paths = paths
+        self.limit = limit
+
+    def __iter__(self):
+        """
+        Stream token lists from pre-defined path lists.
+        """
+        tokenizer = self.tokenizer
+        base_path = self.base_path
+        file_type = self.file_type
+        paths = self.paths
+        limit = self.limit
+
+        assert (paths is None) or (base_path is None)
+
+        if base_path:
+            paths = filefilter.get_paths_iter(base_path, file_type=file_type)
+
+        for i, onepath in enumerate(paths):
+            if self.limit:
+                if i == limit:
+                    raise StopIteration
+
+            with open(onepath, 'r') as f:
+                text = f.read()
+                yield tokenizer.text_to_token_list(text)
+
 

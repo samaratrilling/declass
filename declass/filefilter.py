@@ -8,36 +8,32 @@ import pdb
 from numpy.random import rand
 from functools import partial
 
-from jrl_utils.src.parallel_easy import imap_easy, map_easy
-
-from akin.src import stripper
-
 """
 Contains a collection of function that clean, decode and move files around.
 """
 
 
-def get_paths(dirName, fileType="*", relative=False):
+def get_paths(dir_name, file_type="*", relative=False):
     """
-    Crawls subdirectories and returns list of paths to files that match the fileType.
+    Crawls subdirectories and returns list of paths to files that match the file_type.
 
     Parameters
     ----------
-    dirName : String
+    dir_name : String
         Path to the directory that will be crawled
-    fileType : String
+    file_type : String
         String to filter files with.  E.g. '*.txt'.  Note that the filenames
         will be converted to lowercase before this comparison.
     relative : Boolean
-        If True, get paths relative to dirName
+        If True, get paths relative to dir_name
         If False, get absolute paths
     """
     path_list = []
-    for path, subdirs, files in os.walk(dirName, followlinks=True):
+    for path, subdirs, files in os.walk(dir_name, followlinks=True):
         for name in files:
-            if fnmatch(name.lower(), fileType):
+            if fnmatch(name.lower(), file_type):
                 if relative:
-                    path = path.replace(dirName, "")
+                    path = path.replace(dir_name, "")
                     if path.startswith('/'):
                         path = path[1:]
                 path_list.append(os.path.join(path,name))    
@@ -66,13 +62,41 @@ def path_to_name(path, name_level=1):
     return name
 
 
-def paths_to_files(path_list, mode='r'):
+def get_paths_iter(base_path, file_type="*", relative=False):
+    """
+    Crawls subdirectories and returns an iterator over paths to files that
+    match the file_type.
+
+    Parameters
+    ----------
+    base_path : String
+        Path to the directory that will be crawled
+    file_type : String
+        String to filter files with.  E.g. '*.txt'.  Note that the filenames
+        will be converted to lowercase before this comparison.
+    relative : Boolean
+        If True, get paths relative to base_path
+        If False, get absolute paths
+    """
+    path_list = []
+    for path, subdirs, files in os.walk(base_path, followlinks=True):
+        for name in files:
+            if fnmatch(name.lower(), file_type):
+                if relative:
+                    path = path.replace(base_path, "")
+                    if path.startswith('/'):
+                        path = path[1:]
+                yield os.path.join(path, name)
+
+
+def paths_to_files(paths, mode='r'):
     """
     Returns an iterator that opens files in path_list.
 
     Parameters
     ----------
-    path_list : List of Strings
+    paths : Iterable over paths
+        Each path is a string
     mode : String
         mode to open the files in
 
@@ -81,5 +105,5 @@ def paths_to_files(path_list, mode='r'):
     file_iter : Iterable
         file_iter.next() gives the next open file.
     """
-    for path in path_list:
+    for path in paths:
         yield open(path.strip(), mode=mode)

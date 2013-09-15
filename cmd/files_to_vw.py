@@ -85,10 +85,10 @@ def tokenize(
     """
     Write later if module interface is needed. See _cli for the documentation.
     """
-    assert not (paths and base_path)
+    assert (paths is None) or (base_path is None)
 
     if base_path:
-        paths = filefilter.get_paths(base_path, fileType='*')
+        paths = filefilter.get_paths(base_path, file_type='*')
 
     tokenizer_dict = {'basic': text_processors.TokenizerBasic}
     tokenizer = tokenizer_dict[tokenizer_type]()
