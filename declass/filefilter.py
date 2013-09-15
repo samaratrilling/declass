@@ -80,7 +80,7 @@ class DBCONNECT(object):
 
     Notes
     -----
-    TODO : figure out why pymysql cursor does not exectute 'where in list' type statements
+    TODO : figure out why pymysql cursor does not execute 'where in list' type statements
 
     """
     def __init__(self, host_name, db_name, user_name, pwd):
@@ -143,7 +143,7 @@ class DBCONNECT(object):
 
         Notes
         -----
-        Not strictly necessary, but good practice to close sesssion after use.
+        Not strictly necessary, but good practice to close session after use.
         """
         self.conn.close()
               
