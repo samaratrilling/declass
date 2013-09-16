@@ -13,30 +13,7 @@ import pymysql
 Contains a collection of function that clean, decode and move files around.
 """
 
-
-def get_paths(base_path, file_type="*", relative=False):
-    """
-    Crawls subdirectories and returns list of paths to files that match
-    the file_type.
-
-    Parameters
-    ----------
-    base_path : String
-        Path to the directory that will be crawled
-    file_type : String
-        String to filter files with.  E.g. '*.txt'.  Note that the filenames
-        will be converted to lowercase before this comparison.
-    relative : Boolean
-        If True, get paths relative to dir_name
-        If False, get absolute paths
-    """
-    path_iter = get_paths_iter(
-        base_path, file_type=file_type, relative=relative)
-
-    return [path for path in path_iter]
-
-
-def get_paths_iter(base_path, file_type="*", relative=False):
+def get_paths(base_path, file_type="*", relative=False, get_iter=False):
     """
     Crawls subdirectories and returns an iterator over paths to files that
     match the file_type.
@@ -51,7 +28,19 @@ def get_paths_iter(base_path, file_type="*", relative=False):
     relative : Boolean
         If True, get paths relative to base_path
         If False, get absolute paths
+    get_iter : Boolean
+        If True, return an iterator over paths rather than a list.
     """
+    path_iter = _get_paths_iter(
+        base_path, file_type=file_type, relative=relative)
+
+    if get_iter:
+        return path_iter
+    else:
+        return [path for path in path_iter]
+
+
+def _get_paths_iter(base_path, file_type="*", relative=False):
     path_list = []
     for path, subdirs, files in os.walk(base_path, followlinks=True):
         for name in files:
