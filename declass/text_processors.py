@@ -44,7 +44,7 @@ class TokenizerBasic(object):
         """
         tokens = nlp.word_tokenize(text, L=2, numeric=False)
 
-        return [word for word in tokens if not nlp.is_stopword(word)]
+        return [word.lower() for word in tokens if not nlp.is_stopword(word)]
 
     def path_to_token_list(self, path):
         """
@@ -313,7 +313,7 @@ def path_to_token_list(tokenizer, path):
 
 class TokenStreamer(object):
     """
-    Streams tokens from a source of text files.
+    An iterator that streams tokens from a source of text files.
     """
     def __init__(
         self, tokenizer, base_path=None, file_type='*', paths=None,
@@ -332,34 +332,35 @@ class TokenStreamer(object):
         limit : Integer
             Raise StopIteration after returning limit token lists.
         """
+        assert (paths is None) or (base_path is None)
+
         self.tokenizer = tokenizer
         self.base_path = base_path
         self.file_type = file_type
         self.paths = paths
         self.limit = limit
 
-    def __iter__(self):
-        """
-        Stream token lists from pre-defined path lists.
-        """
-        tokenizer = self.tokenizer
-        base_path = self.base_path
-        file_type = self.file_type
-        paths = self.paths
-        limit = self.limit
-
-        assert (paths is None) or (base_path is None)
-
+        self.index = 0
         if base_path:
-            paths = filefilter.get_paths_iter(base_path, file_type=file_type)
+            self.paths = filefilter.get_paths_iter(
+                base_path, file_type=file_type)
 
-        for i, onepath in enumerate(paths):
-            if self.limit:
-                if i == limit:
-                    raise StopIteration
+    def __iter__(self):
+        # Defined for loops, which expect an iterable, not iterator
+        return self
+
+    def next(self):
+        """
+        x.next() -> the next value, or raise StopIteration
+        """
+        while True:
+            if self.index == self.limit:
+                raise StopIteration
+            onepath = self.paths.next()
+            self.index += 1
 
             with open(onepath, 'r') as f:
                 text = f.read()
-                yield tokenizer.text_to_token_list(text)
+                return self.tokenizer.text_to_token_list(text)
 
 
