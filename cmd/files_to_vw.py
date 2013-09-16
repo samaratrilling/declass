@@ -9,7 +9,7 @@ from collections import Counter
 
 from declass.declass import filefilter, text_processors, nlp
 
-from jrl_utils.src import parallel_easy
+from parallel_easy.parallel_easy.base import imap_easy
 
 
 def _cli():
@@ -80,12 +80,12 @@ def _cli():
 
 
 def tokenize(
-    outfile, paths=None, base_path=None, tokenizer_type='basic',
-    name_level=1, n_jobs=1, chunksize=50):
+    outfile, paths=[], base_path=None, tokenizer_type='basic',
+    name_level=1, n_jobs=1, chunksize=1000):
     """
     Write later if module interface is needed. See _cli for the documentation.
     """
-    assert (paths is None) or (base_path is None)
+    assert (paths == []) or (base_path is None)
 
     if base_path:
         paths = filefilter.get_paths(base_path, file_type='*')
@@ -97,8 +97,7 @@ def tokenize(
 
     func = partial(_tokenize_one, tokenizer, formatter, name_level)
 
-    results_iterator = parallel_easy.imap_easy(
-        func, paths, n_jobs, chunksize)
+    results_iterator = imap_easy(func, paths, n_jobs, chunksize)
 
     for result in results_iterator:
         outfile.write(result + '\n')

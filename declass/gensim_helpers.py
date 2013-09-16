@@ -5,10 +5,10 @@ Helper objects/functions specifically for use with Gensim.
 from . import text_processors
 
 
-class TextFileCorpus(object):
+class TextFilesCorpus(object):
     """
     A gensim corpus-compatible object for streaming bag of word representations
-    from text files.
+    from a directory structure containing text files.
 
     This means we read text files one by one, convert to bag-of-words using
     a dictionary, and then return the bag of words.  If you are repeatedly

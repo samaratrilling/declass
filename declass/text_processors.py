@@ -113,11 +113,12 @@ class SparseFormatter(object):
 
         return record_dict
 
-    def get_token_list(self, record_str):
+    def sstr_to_token_list(self, record_str):
         """
-        Returns a list of tokens (with repeats) corresponding to record_str.
+        Convertes a sparse record string to a list of tokens (with repeats)
+        corresponding to record_str.
 
-        If record_str represented the dict {'hi': 2, 'bye': 1}, then
+        E.g. if record_str represented the dict {'hi': 2, 'bye': 1}, then
         token_list = ['hi', 'hi', 'bye']  (up to permutation).
 
         Parameters
@@ -140,7 +141,7 @@ class SparseFormatter(object):
 
         return token_list
 
-    def file_to_token_iter(self, filepath_or_buffer):
+    def sfile_to_token_iter(self, filepath_or_buffer):
         """
         Return an iterator over filepath_or_buffer that returns, line-by-line,
         a token_list.
@@ -148,6 +149,7 @@ class SparseFormatter(object):
         Parameters
         ----------
         filepath_or_buffer : string or file handle / StringIO.
+            File should be formatted according to self.format.
 
         Returns
         -------
@@ -158,7 +160,7 @@ class SparseFormatter(object):
 
         for line in open_file:
             line = line.rstrip('\n').rstrip('\r')
-            yield self.get_token_list(line)
+            yield self.sstr_to_token_list(line)
 
         if was_path:
             open_file.close()
@@ -305,10 +307,6 @@ class SVMLightFormatter(SparseFormatter):
 
     def _parse_preamble(self, preamble):
         return {'target': float(preamble)}
-
-
-def path_to_token_list(tokenizer, path):
-    return tokenizer.path_to_token_list(path)
 
 
 class TokenStreamer(object):
