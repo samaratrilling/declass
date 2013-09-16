@@ -171,12 +171,25 @@ class DBCONNECT(object):
         TODO: remove after sort out pymysql 'where in ' bug
 
         """
-        row_iter = self.__get_rows_by_idlist_iter(id_list=id_list, table_name=table_name, fields=fields)
+        row_iter = self.__get_rows_by_idlist_iter(id_list, table_name, fields)
         if get_iter:
             return row_iter 
         else:
             row = [row for row in row_iter] 
             return row
+
+    def run_query(self, sql):
+        try:
+            self.cursor.execute(sql)
+            output = self.cursor.fetchall()
+            return output
+        except pymysql.err.InternalError, e:
+            print 'A MySQL error occured!\n' 
+            print 'If you need to consult the DB schema please use either '\
+            'the DBCONNECT.get_field_info() or DBCONNECT'\
+            '.get_table_names() methods.\n'
+            print 'Error details:'
+            return e
 
     def __get_rows_by_idlist_iter(self, id_list, table_name, fields='*'):
         """
@@ -216,13 +229,13 @@ class DBCONNECT(object):
         output = [entry[0] for entry in temp_output]
         return output
 
-    def get_column_info(self, table_name):
+    def get_field_info(self, table_name):
         """
-        Fetches all column names and type for a given table
+        Fetches all field names and type for a given table
 
         Returns
         -------
-        output : list of tuples (column_name, column_type)
+        output : list of tuples (field_name, column_type)
         """
         sql = 'show columns from %s'%table_name
         self.cursor.execute(sql)
@@ -249,17 +262,19 @@ if __name__ == '__main__':
     table_name = 'declassification'
     doc_id = 242518
     fields = 'title'
-    doc = dbCon.get_row_by_id(row_id=doc_id, table_name=table_name, fields=fields)
+    #doc = dbCon.get_row_by_id(row_id=doc_id, table_name=table_name, fields=fields)
     #print doc
-    doc_list = dbCon.get_rows_by_idlist(id_list=[242518, 317509], table_name=table_name, fields=fields)
-    print 'doc list ', doc_list
-    doc_list_iter = dbCon.get_rows_by_idlist(id_list=[242518, 317509], table_name=table_name, fields=fields, get_iter=True)
-    print 'doc1 ', doc_list_iter.next()
-    print 'doc2', doc_list_iter.next()
+    #doc_list = dbCon.get_rows_by_idlist(id_list=[242518, 317509], table_name=table_name, fields=fields)
+    #print 'doc list ', doc_list
+    #doc_list_iter = dbCon.get_rows_by_idlist(id_list=[242518, 317509], table_name=table_name, fields=fields, get_iter=True)
+    #print 'doc1 ', doc_list_iter.next()
+    #print 'doc2', doc_list_iter.next()
 
-    table_names = dbCon.get_table_names()
+    query = dbCon.run_query('select id, title from Document where sdfsd;')
+    print query
+    #table_names = dbCon.get_table_names()
     #print table_names
-    column_info = dbCon.get_column_info(table_name='Document')
+    #field_info = dbCon.get_field_info(table_name='Document')
     #print column_info
     dbCon.close()
 
