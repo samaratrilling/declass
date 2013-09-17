@@ -6,7 +6,7 @@ from datetime import datetime
 import copy
 from collections import Counter, OrderedDict
 
-from declass.declass import text_processors
+from declass.utils import text_processors
 
 
 class TestTokenizerBasic(unittest.TestCase):

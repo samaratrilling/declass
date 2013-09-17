@@ -7,7 +7,7 @@ from functools import partial
 import sys
 from collections import Counter
 
-from declass.declass import filefilter, text_processors, nlp
+from declass.utils import filefilter, text_processors, nlp
 
 from parallel_easy.parallel_easy.base import imap_easy
 
