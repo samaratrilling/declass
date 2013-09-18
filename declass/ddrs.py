@@ -2,6 +2,7 @@
 Managing and formatting of DDRS document.
 """
 import declass.utils.database as db
+import declass.utils.filefilter as ff
 
 def make_db_connect():
     """
@@ -94,7 +95,7 @@ class Document(object):
             raise Exception("Type " + type + " not recognized.")         
                 
     @staticmethod
-    def fetch_from_files(directory, ids):
+    def fetch_from_files(directory, ids = None):
         """
         Fetch documents from the filesytem. 
 
@@ -104,17 +105,25 @@ class Document(object):
             The file directory with the raw documents.
 
         ids : Iterator
-            The id's of the documents to fetch.
+            The id's of the documents to fetch, or None to get all.
 
         Returns
         -------
         Iterator
             Document objects for each id in ids. 
         """
-        for id in ids:
-            file_name = "{}/{}.raw.txt".format(directory, id)
-            with open(file_name) as in_doc:
-                yield Document(id, in_doc.read())
+        if ids == None:
+            paths = ff.get_paths(directory, file_type = "*.raw.txt")
+            for file_name in paths:
+                id = int(file_name.split("/")[-1].split(".")[0])
+                with open(file_name) as in_doc:
+                    yield Document(id, in_doc.read())
+                
+        else:
+            for id in ids:
+                file_name = "{}/{}.raw.txt".format(directory, id)
+                with open(file_name) as in_doc:
+                    yield Document(id, in_doc.read())
 
     @staticmethod
     def write_to_files(directory, documents, format):
