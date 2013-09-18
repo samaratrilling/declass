@@ -37,7 +37,7 @@ class DBCONNECT(object):
         pwd : string
         """
         self.conn = pymysql.connect(host=host_name, user=user_name, passwd=pwd, db=db_name)
-        self.cursor = self.conn.cursor()
+        self.cursor = self.conn.cursor(pymysql.cursors.DictCursor)
         self.conn.autocommit(1)
 
     def get_row_by_id(self, row_id, table_name, fields='*'):
