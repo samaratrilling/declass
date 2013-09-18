@@ -171,37 +171,17 @@ class DBCONNECT(object):
         TODO: remove after sort out pymysql 'where in ' bug
 
         """
-        row_iter = self.__get_rows_by_idlist_iter(id_list=id_list, table_name=table_name, fields=fields)
+        row_iter = (
+            self.get_row_by_id(
+            row_id=row_id, table_name=table_name, fields=fields)
+            for row_id in id_list)
+
         if get_iter:
             return row_iter 
         else:
             row = [row for row in row_iter] 
             return row
 
-    def __get_rows_by_idlist_iter(self, id_list, table_name, fields='*'):
-        """
-        Parameters
-        ----------
-        id_list : list of strings or ints
-        table_name : string
-        fields : string
-            format = 'field1, field2, ...'; default is all fields
-
-        Returns
-        -------
-        output_list : list 
-        
-        Notes
-        -----
-        assumes table has an 'id' entry
-        TODO: remove after sort out pymysql 'where in ' bug
-
-        """
-
-        return (self.get_row_by_id(row_id=row_id, table_name=table_name,
-            fields=fields) for row_id in id_list)
-
-        
     def get_table_names(self):
         """
         Fetches all table names in the DB.
@@ -229,7 +209,6 @@ class DBCONNECT(object):
         temp_output = self.cursor.fetchall()
         output = [entry[:2] for entry in temp_output]
         return output
-
 
     def close(self):
         """

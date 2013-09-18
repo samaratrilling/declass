@@ -42,23 +42,16 @@ class TextFilesCorpus(object):
         self.paths = paths
         self.limit = limit
 
-        self.index = 0
-        self.token_streamer = text_processors.TokenStreamer(
+    def __iter__(self):
+        """
+        Returns an iterator of "corpus type" over text files.
+        """
+        token_streamer = text_processors.TokenStreamer(
             self.tokenizer, base_path=self.base_path, file_type=self.file_type,
             paths=self.paths)
 
-    def __iter__(self):
-        # Defined for loops, which expect an iterable, not iterator
-        return self
-
-    def next(self):
-        """
-        x.next() -> the next value, or raise StopIteration
-        """
-        while True:
-            if self.index == self.limit:
+        for index, token_list in enumerate(token_streamer):
+            if index == self.limit:
                 raise StopIteration
-            token_list = self.token_streamer.next()
-            self.index += 1
 
-            return self.dictionary.doc2bow(token_list)
+            yield self.dictionary.doc2bow(token_list)

@@ -62,7 +62,7 @@ def convert(infile, outfile, from_format, to_format):
     for line in infile:
         line = line.rstrip('\n').rstrip('\r')
         line_dict = from_formatter.get_dict(line)
-        output = to_formatter.get_str(**line_dict)
+        output = to_formatter.get_sstr(**line_dict)
 
         outfile.write(output + '\n')
 

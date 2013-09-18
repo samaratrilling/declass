@@ -72,9 +72,10 @@ class SparseFormatter(object):
     Base class for sparse formatting, e.g. VW or svmlight.  
     Not meant to be directly used.
     """
-    def _parse_feature_str(self, feature_str):
+    def _parse_sstr(self, feature_str):
         """
-        Returns feature_values = {feature1: value1, feature2: value2,...}
+        Parses a sparse feature string and returns 
+        feature_values = {feature1: value1, feature2: value2,...}
         """
         # We currently don't support namespaces, so feature_str must start
         # with a space then feature1[:value1] feature2[:value2] ...
@@ -109,7 +110,7 @@ class SparseFormatter(object):
 
         record_dict = self._parse_preamble(preamble)
 
-        record_dict['feature_values'] = self._parse_feature_str(feature_str)
+        record_dict['feature_values'] = self._parse_sstr(feature_str)
 
         return record_dict
 
@@ -179,10 +180,10 @@ class VWFormatter(SparseFormatter):
         self.format_name = 'vw'
         self.preamble_char = '|'
 
-    def get_str(
+    def get_sstr(
         self, feature_values=None, target=None, importance=None, tag=None):
         """
-        Return a string reprsenting one record in VW format:
+        Return a string reprsenting one record in sparse VW format:
 
         Parameters
         ----------
@@ -279,10 +280,10 @@ class SVMLightFormatter(SparseFormatter):
         self.format_name = 'svmlight'
         self.preamble_char = ' '
 
-    def get_str(
+    def get_sstr(
         self, feature_values=None, target=1, importance=None, tag=None):
         """
-        Return a string reprsenting one record in SVM-Light format
+        Return a string reprsenting one record in SVM-Light sparse format
         <line> .=. <target> <feature>:<value> <feature>:<value>
 
         Parameters
@@ -311,7 +312,7 @@ class SVMLightFormatter(SparseFormatter):
 
 class TokenStreamer(object):
     """
-    An iterator that streams tokens from a source of text files.
+    An iterable that streams tokens from a source of text files.
     """
     def __init__(
         self, tokenizer, base_path=None, file_type='*', paths=None,
@@ -338,27 +339,20 @@ class TokenStreamer(object):
         self.paths = paths
         self.limit = limit
 
-        self.index = 0
-        if base_path:
-            self.paths = filefilter.get_paths_iter(
-                base_path, file_type=file_type)
-
     def __iter__(self):
-        # Defined for loops, which expect an iterable, not iterator
-        return self
+        """
+        Returns an iterator over paths returning token lists.
+        """
+        if self.base_path:
+            paths = filefilter.get_paths(
+                self.base_path, file_type=self.file_type, get_iter=True)
+        else:
+            paths = self.paths
 
-    def next(self):
-        """
-        x.next() -> the next value, or raise StopIteration
-        """
-        while True:
-            if self.index == self.limit:
+        for index, onepath in enumerate(paths):
+            if index == self.limit:
                 raise StopIteration
-            onepath = self.paths.next()
-            self.index += 1
 
             with open(onepath, 'r') as f:
                 text = f.read()
-                return self.tokenizer.text_to_token_list(text)
-
-
+                yield self.tokenizer.text_to_token_list(text)

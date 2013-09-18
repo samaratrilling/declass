@@ -116,9 +116,9 @@ def _tokenize_one(tokenizer, formatter, name_level, path):
 
     # Format
     tag = filefilter.path_to_name(path, name_level=name_level)
-    tok_str = formatter.get_str(tokens, importance=1, tag=tag)
+    tok_sstr = formatter.get_sstr(tokens, importance=1, tag=tag)
 
-    return tok_str
+    return tok_sstr
 
 
 
