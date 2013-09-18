@@ -1,0 +1,161 @@
+The schema of the Declassification database is -
+
+mysql> SELECT table_name, column_name, data_type, column_comment FROM                                                                            INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = 'Declassification';
++-------------------------+-------------------+------------+------------------------------------------------------------------------------------------------------------+
+| table_name              | column_name       | data_type  | column_comment                                                                                             |
++-------------------------+-------------------+------------+------------------------------------------------------------------------------------------------------------+
+| Actor                   | ID                | int        |                                                                                                            |
+| Actor                   | name              | varchar    |                                                                                                            |
+| ActorIndex              | relationship      | tinyint    |                                                                                                            |
+| ActorIndex              | actorID           | int        |                                                                                                            |
+| ActorIndex              | cableID           | int        |                                                                                                            |
+| ArchivalReference       | docID             | bigint     |                                                                                                            |
+| ArchivalReference       | cdid              | bigint     |                                                                                                            |
+| ArchivalReference       | ficheid           | varchar    |                                                                                                            |
+| Authority               | ID                | int        |                                                                                                            |
+| Authority               | name              | varchar    |                                                                                                            |
+| Cable                   | ID                | int        |                                                                                                            |
+| Cable                   | subject           | varchar    |                                                                                                            |
+| Cable                   | date              | datetime   |                                                                                                            |
+| Cable                   | classification    | varchar    |                                                                                                            |
+| Cable                   | filmnum           | varchar    |                                                                                                            |
+| Cable                   | docnum            | varchar    |                                                                                                            |
+| Disposition             | comment           | varchar    |                                                                                                            |
+| Disposition             | cableID           | int        |                                                                                                            |
+| Disposition             | authorityID       | int        |                                                                                                            |
+| Disposition             | date              | datetime   |                                                                                                            |
+| Document                | id                | bigint     | Primary key (from source file)                                                                             |
+| Document                | type              | varchar    |                                                                                                            |
+| Document                | pages             | int        |                                                                                                            |
+| Document                | title             | text       |                                                                                                            |
+| Document                | publisher         | varchar    |                                                                                                            |
+| Document                | written           | date       | Date the document was originally written.                                                                  |
+| Document                | published         | date       | Date the document was declassified.                                                                        |
+| Document                | body              | mediumtext | The body text of the document.                                                                             |
+| Document                | classification    | varchar    | Classification level of the original document.                                                             |
+| Document                | sanitation        | varchar    | Is the document Sanitized or Unsanitized?                                                                  |
+| Document                | completeness      | varchar    | Is the document Complete or Incomplete?                                                                    |
+| Document                | keyword           | varchar    | Keyword assigned by DDRS (not very informative).                                                           |
+| Document                | cdid              | bigint     | Cengage ID number.                                                                                         |
+| Document                | ficheid           | varchar    | Id indicating how the document is stored. First six digits are id, last 4 are the year processed by DDRS.  |
+| DocumentPair            | docId1            | bigint     |                                                                                                            |
+| DocumentPair            | docId2            | bigint     |                                                                                                            |
+| DocumentPairHuman       | id                | int        |                                                                                                            |
+| DocumentPairHuman       | docId1            | bigint     | Foreign key indicating the first document in the pair.                                                     |
+| DocumentPairHuman       | docId2            | bigint     | Foreign key indicating the second document in the pair.                                                    |
+| DocumentPairHuman       | page1             | int        | The page of the first document in the match.                                                               |
+| DocumentPairHuman       | page2             | int        | The page of the second document in the pair.                                                               |
+| DocumentPairHuman       | badmatch          | smallint   | Is this a bad match? (Layout of the documents is not the same).                                            |
+| DocumentPairHumanRedact | id                | int        |                                                                                                            |
+| DocumentPairHumanRedact | pairId            | int        | Foreign key to DocumentPairHuman.                                                                          |
+| DocumentPairHumanRedact | startX            | float      | The x coordinate of the start of the redaction in percent of width.                                        |
+| DocumentPairHumanRedact | startY            | float      | The y coordinate of the start of the redaction in percent of height.                                       |
+| DocumentPairHumanRedact | endX              | float      | The x coordinate of the end of the redaction in percent of width.                                          |
+| DocumentPairHumanRedact | endY              | float      | The y coordinate of the end of the redaction in percent of height.                                         |
+| DocumentPairHumanRedact | startText         | int        | The start position of the text in offset of plain text characters.                                         |
+| DocumentPairHumanRedact | endText           | int        | The end position of the text in offset of plain text characters.                                           |
+| DocumentPairHumanRedact | side              | int        | Is the redaction in the 1st or 2nd document of the pair.                                                   |
+| DocumentPairHumanRedact | text              | text       | The text of the redaction.                                                                                 |
+| DocumentRedaction       | id                | int        |                                                                                                            |
+| DocumentRedaction       | docId1            | bigint     |                                                                                                            |
+| DocumentRedaction       | docId2            | bigint     |                                                                                                            |
+| DocumentRedaction       | confirmed         | tinyint    | Has this redaction been confirmed by a person?                                                             |
+| DocumentRedaction       | start1            | int        | Start position in document 1.                                                                              |
+| DocumentRedaction       | end1              | int        | End position in document 1.                                                                                |
+| DocumentRedaction       | start2            | int        | Start position in document 2.                                                                              |
+| DocumentRedaction       | end2              | int        | End position in document 2.                                                                                |
+| DocumentRedaction       | computerConfirmed | tinyint    | Has this redaction been confirmed by a person (not used currently).                                        |
+| DocumentRedactionText   | id                | int        |                                                                                                            |
+| DocumentRedactionText   | redaction         | text       | The text of the redaction.                                                                                 |
+| DocumentRedactionText   | has_dots          | tinyint    | (not used)                                                                                                 |
+| DocumentRedactionText   | has_blackout      | tinyint    | (not used)                                                                                                 |
+| FullCable               | cableID           | int        |                                                                                                            |
+| FullCable               | office            | varchar    |                                                                                                            |
+| FullCable               | docID             | int        |                                                                                                            |
+| FullCable               | channel           | varchar    |                                                                                                            |
+| FullCable               | msgtext           | text       |                                                                                                            |
+| FullCable               | type              | varchar    |                                                                                                            |
+| PropertyIndex           | type              | varchar    |                                                                                                            |
+| PropertyIndex           | value             | varchar    |                                                                                                            |
+| PropertyIndex           | cableID           | int        |                                                                                                            |
+| Review                  | cableID           | int        |                                                                                                            |
+| Review                  | flags             | varchar    |                                                                                                            |
+| Review                  | date              | varchar    |                                                                                                            |
+| Review                  | authorityID       | int        |                                                                                                            |
+| Tags                    | id                | varchar    |                                                                                                            |
+| Tags                    | docID             | bigint     |                                                                                                            |
+| Tags                    | name              | text       |                                                                                                            |
+| WithdrawnCable          | cableID           | int        |                                                                                                            |
+| WithdrawnCable          | markings          | text       |                                                                                                            |
+| frus                    | DID               | bigint     |                                                                                                            |
+| frus                    | titlefull         | text       |                                                                                                            |
+| frus                    | titledesc         | text       |                                                                                                            |
+| frus                    | dateline          | text       |                                                                                                            |
+| frus                    | dateline_place    | text       |                                                                                                            |
+| frus                    | dateline_date     | text       |                                                                                                            |
+| frus                    | dateline_datesql  | bigint     |                                                                                                            |
+| frus                    | tei_gloss         | text       |                                                                                                            |
+| frus                    | tei_place         | text       |                                                                                                            |
+| frus                    | tei_date          | text       |                                                                                                            |
+| frus                    | tei_person        | text       |                                                                                                            |
+| frus                    | footnotes         | longtext   |                                                                                                            |
+| frus                    | endfootnotes      | longtext   |                                                                                                            |
+| frus                    | fullbody          | longtext   |                                                                                                            |
+| redactions              | redact_id         | bigint     |                                                                                                            |
+| redactions              | DID               | bigint     |                                                                                                            |
+| redactions              | position_start    | int        |                                                                                                            |
+| redactions              | position_end      | int        |                                                                                                            |
+| redactions              | redaction_length  | int        |                                                                                                            |
+| redactions              | redaction         | text       |                                                                                                            |
+| statedeptcables         | DOCID             | bigint     |                                                                                                            |
+| statedeptcables         | SASDOCKEY         | text       |                                                                                                            |
+| statedeptcables         | CONCEPTS          | text       |                                                                                                            |
+| statedeptcables         | DATE              | text       |                                                                                                            |
+| statedeptcables         | DATESQL           | bigint     |                                                                                                            |
+| statedeptcables         | DOC_NBR           | text       |                                                                                                            |
+| statedeptcables         | FILM              | text       |                                                                                                            |
+| statedeptcables         | MSGFROM           | text       |                                                                                                            |
+| statedeptcables         | OFFICE            | text       |                                                                                                            |
+| statedeptcables         | ORIGCLASS         | text       |                                                                                                            |
+| statedeptcables         | ORIGHANDLING      | text       |                                                                                                            |
+| statedeptcables         | PREVCLASS         | text       |                                                                                                            |
+| statedeptcables         | PREVHANDLING      | text       |                                                                                                            |
+| statedeptcables         | REVIEW_AUTHORITY  | text       |                                                                                                            |
+| statedeptcables         | REVIEW_DATE       | text       |                                                                                                            |
+| statedeptcables         | SUBJECT           | text       |                                                                                                            |
+| statedeptcables         | TAGS              | text       |                                                                                                            |
+| statedeptcables         | MSGTO             | text       |                                                                                                            |
+| statedeptcables         | TYPE              | text       |                                                                                                            |
+| statedeptcables         | CHANNEL           | text       |                                                                                                            |
+| statedeptcables         | PREVCHANNEL       | text       |                                                                                                            |
+| statedeptcables         | DISP_COMMENT      | text       |                                                                                                            |
+| statedeptcables         | DISP_AUTH         | text       |                                                                                                            |
+| statedeptcables         | DISP_DATE         | text       |                                                                                                            |
+| statedeptcables         | REVIEW_AUTH       | text       |                                                                                                            |
+| statedeptcables         | REVIEW_FLAGS      | text       |                                                                                                            |
+| statedeptcables         | REVIEWHISTORY     | text       |                                                                                                            |
+| statedeptcables         | MSGTEXT           | longtext   |                                                                                                            |
+| statedeptcables         | FULLXML           | longtext   |                                                                                                            |
+| statedeptcables         | SOURCEFILE        | text       |                                                                                                            |
+| statedeptcables         | cleanFrom         | text       |                                                                                                            |
+| statedeptcables         | cleanTo           | text       |                                                                                                            |
+| term_index              | id                | int        |                                                                                                            |
+| term_index              | feature_type      | varchar    |                                                                                                            |
+| term_index              | value             | varchar    |                                                                                                            |
+| term_index              | docid             | int        |                                                                                                            |
+| term_index              | redacted          | tinyint    |                                                                                                            |
+| withdrawalcards         | id                | int        |                                                                                                            |
+| withdrawalcards         | classification    | text       |                                                                                                            |
+| withdrawalcards         | draftDate         | text       |                                                                                                            |
+| withdrawalcards         | documentNumber    | text       |                                                                                                            |
+| withdrawalcards         | msgfrom           | text       |                                                                                                            |
+| withdrawalcards         | msgto             | text       |                                                                                                            |
+| withdrawalcards         | subject           | text       |                                                                                                            |
+| withdrawalcards         | tags              | text       |                                                                                                            |
+| withdrawalcards         | concepts          | text       |                                                                                                            |
+| withdrawalcards         | filmNumber        | text       |                                                                                                            |
+| withdrawalcards         | markings          | text       |                                                                                                            |
+| withdrawalcards         | cleanFrom         | text       |                                                                                                            |
+| withdrawalcards         | cleanTo           | text       |                                                                                                            |
++-------------------------+-------------------+------------+------------------------------------------------------------------------------------------------------------+
+153 rows in set (0.07 sec)
