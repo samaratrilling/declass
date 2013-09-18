@@ -2,7 +2,7 @@
 Dump the DDRS Documents to flat files.
 """
 import argparse
-import declass.declass.ddrs as ddrs
+import declass.ddrs as ddrs
 
 def _cli():
     parser = argparse.ArgumentParser(
@@ -20,7 +20,7 @@ def _cli():
 
     dbCon = ddrs.make_db_connect()
     rows = dbCon.run_query("SELECT id, body FROM Document")
-    documents = (ddrs.Document(row["id"], row["body"]) 
+    documents = (ddrs.Document(row["id"], row["body"])
                  for row in rows)
     ddrs.Document.write_to_files(args.outdir, documents, args.format)
 

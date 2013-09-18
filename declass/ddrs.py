@@ -13,17 +13,19 @@ def make_db_connect():
                         pwd='declass')
     
 
+
 class Document(object):
     def __init__(self, id, unformatted_text):
         """
         Initialize a DDRS Document.
+
         Parameters
         ----------
         id : Int
-        The document identifier.
+             The document identifier.
 
         unformatted_text : String
-        The unformatted (original) text of the document with markup.
+             The unformatted (original) text of the document with markup.
         """
         self.id = id
         self.unformatted_text = unformatted_text
@@ -47,12 +49,12 @@ class Document(object):
         Parameters
         ----------
         text : String
-        The unformatted text with markup.
+            The unformatted text with markup.
 
         Returns
         -------
-        doc : String
-        The cleaned text.
+        String
+            The cleaned text.
         """
         return text.replace("</PARA>", " \n ") \
             .replace("<PARA>", " \n ") \
@@ -71,15 +73,15 @@ class Document(object):
         Parameters
         ----------
         type : String
-        The type of the formatting. Including:
-        clean -> Remove all the formatting.
-        nofoot -> Remove all the formatting and footers.
-        raw -> Original text with markup.
+            The type of the formatting. Including:
+            clean -> Remove all the formatting.
+            nofoot -> Remove all the formatting and footers.
+            raw -> Original text with markup.
 
         Returns
         -------
-        doc : String
-        The formatted text.
+        String
+            The formatted text.
         """
         if type == "clean":
             return self.clean_text    
@@ -99,15 +101,15 @@ class Document(object):
         Parameters
         ----------
         directory : String
-        The file directory with the raw documents.
+            The file directory with the raw documents.
 
         ids : Iterator
-        The id's of the documents to fetch.
+            The id's of the documents to fetch.
 
         Returns
         -------
-        docs : Iterator
-        Document objects for each id in ids. 
+        Iterator
+            Document objects for each id in ids. 
         """
         for id in ids:
             file_name = "{}/{}.raw.txt".format(directory, id)
@@ -134,6 +136,7 @@ class Document(object):
             file_name = "{}/{}.{}.txt".format(directory, doc.id, format)
             with open(file_name, "w") as out:
                 out.write(doc.format(format))
+
 
 if __name__ == "__main__":
     dbCon = make_db_connect()

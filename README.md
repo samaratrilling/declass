@@ -1,6 +1,6 @@
 declass
 =======
-Code for the De-classification project.
+Code for the Declassification project.
 
 Style Guide
 -----------
@@ -27,11 +27,6 @@ Read `README_data.md` for more.
 Directories
 -----------
 
-### declass
-modules
-
-### cmd
-command-line utilities
 
 ### notebooks
 For ipython notebooks.  Put your name in the notebook name to avoid redundancy.
@@ -39,10 +34,22 @@ For ipython notebooks.  Put your name in the notebook name to avoid redundancy.
 ### schema
 Schema for the data sets
 
-### tests
-Unit tests.
 
 ### scripts
 Shell scripts, python scripts, etc...
 
 
+Code Directories
+----------------
+
+### declass
+modules specific to declassification project
+
+### declass/utils
+general utility modules
+
+### declass/cmd
+command-line utilities
+
+### declass/tests
+Unit tests.

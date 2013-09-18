@@ -10,14 +10,14 @@ class DBCONNECT(object):
 
     Example
     -------
-    dbCon = DBCONNECT(host_name='mysql.csail.mit.edu', 
+    dbCon = DBCONNECT(host_name='mysql.csail.mit.edu',
             db_name='declassification', user_name='declass', pwd='declass')
     table_name = 'declassification'
     doc_id = 242518
     fields = 'body, title'
-    doc = dbCon.get_row_by_id(row_id=doc_id, table_name=table_name, 
+    doc = dbCon.get_row_by_id(row_id=doc_id, table_name=table_name,
             fields=fields)
-    doc_list = dbCon.get_rows_by_idlist(id_list=[242518, 317509], 
+    doc_list = dbCon.get_rows_by_idlist(id_list=[242518, 317509],
             table_name=table_name, fields=fields)
 
     Notes
@@ -51,8 +51,8 @@ class DBCONNECT(object):
 
         Returns
         -------
-        output : list 
-        
+        output : list
+
         Notes
         -----
         assumes table has an 'id' entry
@@ -74,38 +74,28 @@ class DBCONNECT(object):
 
         Returns
         -------
-        output_list : list 
-        
+        output_list : list
+
         Notes
         -----
         assumes table has an 'id' entry
         TODO: remove after sort out pymysql 'where in ' bug
 
         """
-<<<<<<< HEAD:declass/filefilter.py
-        row_iter = (
-            self.get_row_by_id(
-            row_id=row_id, table_name=table_name, fields=fields)
-            for row_id in id_list)
-
-=======
         row_iter = self.__get_rows_by_idlist_iter(id_list, table_name, fields)
->>>>>>> a4fb1b2f8416d26e90dca7c92cad8676928c0b35:utils/database.py
         if get_iter:
-            return row_iter 
+            return row_iter
         else:
-            row = [row for row in row_iter] 
+            row = [row for row in row_iter]
             return row
 
-<<<<<<< HEAD:declass/filefilter.py
-=======
     def run_query(self, sql):
         try:
             self.cursor.execute(sql)
             output = self.cursor.fetchall()
             return output
         except pymysql.err.InternalError, e:
-            print 'A MySQL error occured!\n' 
+            print 'A MySQL error occured!\n'
             print 'If you need to consult the DB schema please use either '\
             'the DBCONNECT.get_field_info() or DBCONNECT'\
             '.get_table_names() methods.\n'
@@ -123,8 +113,8 @@ class DBCONNECT(object):
 
         Returns
         -------
-        output_list : list 
-        
+        output_list : list
+
         Notes
         -----
         assumes table has an 'id' entry
@@ -135,8 +125,7 @@ class DBCONNECT(object):
         return (self.get_row_by_id(row_id=row_id, table_name=table_name,
             fields=fields) for row_id in id_list)
 
-        
->>>>>>> a4fb1b2f8416d26e90dca7c92cad8676928c0b35:utils/database.py
+
     def get_table_names(self):
         """
         Fetches all table names in the DB.
@@ -174,11 +163,11 @@ class DBCONNECT(object):
         Not strictly necessary, but good practice to close session after use.
         """
         self.conn.close()
-              
-    
+
+
 
 if __name__ == '__main__':
-    
+
     dbCon = DBCONNECT(host_name='mysql.csail.mit.edu', db_name='declassification', user_name='declass', pwd='declass')
     table_name = 'declassification'
     doc_id = 242518
