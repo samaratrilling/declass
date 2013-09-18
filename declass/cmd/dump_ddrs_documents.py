@@ -18,12 +18,15 @@ def _cli():
         help='Directory to read formatted files.')
 
     parser.add_argument(
-        '-s', '--source', required=False,
+        '-s', '--source', required=True,
         help='Source to get the documents from either {db, file}.')
 
     parser.add_argument(
         '-f', '--format', required=True,
-        help='Format to write out the files.')
+        help="""Format to write out the files.
+            clean -> Remove all the formatting.
+            nofoot -> Remove all the formatting and footers.
+            raw -> Original text with markup.""")
     args = parser.parse_args()
 
     dbCon = ddrs.make_db_connect()
