@@ -87,7 +87,7 @@ class Document(object):
         if type == "clean":
             return self.clean_text    
         elif type == "nofoot":
-            body_text = [page[""] for page in self.sectioned_pages]
+            body_text = [page["body"] for page in self.sectioned_pages]
             return " *PAGE* ".join(body_text)
         elif type == "raw":
             return self.unformatted_text
