@@ -15,7 +15,7 @@ Dependencies
 * A number of standard python modules that can be installed using `pip`
 * The easiest way of installing/maintaining many python packages is by using [anaconda](https://store.continuum.io/cshop/anaconda/).
 
-The directory above this this repo and all depencencies should be added to your `PYTHONPATH`.
+This directory (and all depencencies) should be added to your `PYTHONPATH`.
 
 Data
 ----
