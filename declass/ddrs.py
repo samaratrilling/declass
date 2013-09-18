@@ -95,7 +95,7 @@ class Document(object):
             raise Exception("Type " + type + " not recognized.")         
                 
     @staticmethod
-    def fetch_from_files(directory, ids = None):
+    def fetch_from_files(directory, ids=None):
         """
         Fetch documents from the filesytem. 
 
@@ -112,7 +112,7 @@ class Document(object):
         Iterator
             Document objects for each id in ids. 
         """
-        if ids == None:
+        if ids is None:
             paths = ff.get_paths(directory, file_type = "*.raw.txt")
             for file_name in paths:
                 id = int(file_name.split("/")[-1].split(".")[0])
