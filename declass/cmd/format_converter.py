@@ -8,8 +8,6 @@ from collections import Counter
 
 from declass.utils import filefilter, text_processors, nlp
 
-from jrl_utils.src import parallel_easy
-
 
 def _cli():
     # Text to display after help

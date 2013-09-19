@@ -9,7 +9,7 @@ from collections import Counter
 
 from declass.utils import filefilter, text_processors, nlp
 
-from parallel_easy.parallel_easy.base import imap_easy
+from parallel_easy.base import imap_easy
 
 
 def _cli():

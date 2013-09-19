@@ -6,6 +6,7 @@ Style Guide
 -----------
 
 * Make changes through pull requests
+* Submit issues and bug reports with GitHub issues
 * Start reading the [LowClass Python style-guide](http://columbia-applied-data-science.github.io/pages/lowclass-python-style-guide.html)
 
 Dependencies
@@ -27,13 +28,11 @@ Read `README_data.md` for more.
 Directories
 -----------
 
-
 ### notebooks
 For ipython notebooks.  Put your name in the notebook name to avoid redundancy.
 
 ### schema
 Schema for the data sets
-
 
 ### scripts
 Shell scripts, python scripts, etc...
@@ -52,4 +51,4 @@ general utility modules
 command-line utilities
 
 ### declass/tests
-Unit tests.
+Unit tests for declass.
