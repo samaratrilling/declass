@@ -51,9 +51,20 @@ def _get_paths_iter(base_path, file_type="*", relative=False):
                 yield os.path.join(path, name)
 
 
-def path_to_name(path, name_level=1):
+def path_to_name(path):
     """
-    Takes one path and returns a name.
+    Takes one path and returns the filename, excluding the extension.
+    """
+    head, tail = os.path.split(path)
+    filename, ext = os.path.splitext(tail)
+
+    return filename
+
+
+def path_to_newname(path, name_level=1):
+    """
+    Takes one path and returns a new name, combining the directory structure
+    with the filename.
 
     Parameters
     ----------

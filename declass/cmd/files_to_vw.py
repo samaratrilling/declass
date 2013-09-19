@@ -115,7 +115,7 @@ def _tokenize_one(tokenizer, formatter, name_level, path):
     tokens = tokenizer.text_to_counter(text)
 
     # Format
-    tag = filefilter.path_to_name(path, name_level=name_level)
+    tag = filefilter.path_to_newname(path, name_level=name_level)
     tok_sstr = formatter.get_sstr(tokens, importance=1, tag=tag)
 
     return tok_sstr
