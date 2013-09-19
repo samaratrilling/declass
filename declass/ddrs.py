@@ -1,8 +1,11 @@
 """
 Managing and formatting of DDRS document.
 """
+import os
+
 import declass.utils.database as db
 import declass.utils.filefilter as ff
+
 
 def make_db_connect():
     """
@@ -12,14 +15,14 @@ def make_db_connect():
                         db_name='declassification',
                         user_name='declass', 
                         pwd='declass')
-    
 
 
 class Document(object):
+    """
+    Class to hold and process documents from the ddrs collection.
+    """
     def __init__(self, id, unformatted_text):
         """
-        Initialize a DDRS Document.
-
         Parameters
         ----------
         id : Int
@@ -66,14 +69,13 @@ class Document(object):
             .replace("<DOC.BODY>", " ") \
             .replace("\\n", " \n ")
 
-
-    def format(self, type):
+    def format(self, output_spec):
         """
         Transform the text in a specific format.
 
         Parameters
         ----------
-        type : String
+        output_spec : String
             The type of the formatting. Including:
             clean -> Remove all the formatting.
             nofoot -> Remove all the formatting and footers.
@@ -84,15 +86,15 @@ class Document(object):
         String
             The formatted text.
         """
-        if type == "clean":
+        if output_spec == "clean":
             return self.clean_text    
-        elif type == "nofoot":
+        elif output_spec == "nofoot":
             body_text = [page["body"] for page in self.sectioned_pages]
             return " *PAGE* ".join(body_text)
-        elif type == "raw":
+        elif output_spec == "raw":
             return self.unformatted_text
         else:
-            raise Exception("Type " + type + " not recognized.")         
+            raise Exception("output_spec " + output_spec + " not recognized.")
                 
     @staticmethod
     def fetch_from_files(directory, ids=None):
@@ -113,38 +115,42 @@ class Document(object):
             Document objects for each id in ids. 
         """
         if ids is None:
-            paths = ff.get_paths(directory, file_type = "*.raw.txt")
-            for file_name in paths:
-                id = int(file_name.split("/")[-1].split(".")[0])
-                with open(file_name) as in_doc:
+            path_iter = ff.get_paths(
+                directory, file_type="*.raw.txt", get_iter=True)
+            for path in path_iter:
+                head, tail = os.path.split(path)
+                id = int(tail.split('.')[0])
+                with open(path) as in_doc:
                     yield Document(id, in_doc.read())
                 
         else:
             for id in ids:
-                file_name = "{}/{}.raw.txt".format(directory, id)
-                with open(file_name) as in_doc:
+                file_name = "{}.raw.txt".format(id)
+                path = os.path.join(directory, file_name)
+                with open(path) as in_doc:
                     yield Document(id, in_doc.read())
 
     @staticmethod
-    def write_to_files(directory, documents, format):
+    def write_to_files(directory, documents, output_spec):
         """
         Write documents to the filesytem. 
 
         Parameters
         ----------
         directory : String
-        The file directory for the documents.
+            The file directory for the documents.
 
-        documents : Iterator
-        The documents to write out.
+        documents : Iterable over a set of ddrs.Documents
+            The documents to write out.
 
-        format : String
-        Format to write out the documents in.
+        output_spec : String
+            Format to write out the documents in.
         """
         for doc in documents:
-            file_name = "{}/{}.{}.txt".format(directory, doc.id, format)
-            with open(file_name, "w") as out:
-                out.write(doc.format(format))
+            file_name = "{}.{}.txt".format(doc.id, output_spec)
+            path = os.path.join(directory, file_name)
+            with open(path, "w") as out:
+                out.write(doc.format(output_spec))
 
 
 if __name__ == "__main__":

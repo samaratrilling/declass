@@ -22,8 +22,12 @@ def _cli():
         help='Source to get the documents from either {db, file}.')
 
     parser.add_argument(
-        '-f', '--format', required=True,
-        help="""Format to write out the files.
+        '-l', '--limit', type=int,
+        help='Only retrieve LIMIT number of documents')
+
+    parser.add_argument(
+        '--output_spec', required=True,
+        help="""Specifies the format to write out the files.
             clean -> Remove all the formatting.
             nofoot -> Remove all the formatting and footers.
             raw -> Original text with markup.""")
@@ -31,13 +35,17 @@ def _cli():
 
     dbCon = ddrs.make_db_connect()
     if args.source == "db":
-        rows = dbCon.run_query("SELECT id, body FROM Document")
+        query = "SELECT id, body FROM Document"
+        if args.limit:
+            query += " LIMIT %d" % args.limit
+        rows = dbCon.run_query(query)
         documents = (ddrs.Document(row["id"], row["body"])
                      for row in rows)
     elif args.source == "file":
         documents = ddrs.Document.fetch_from_files(args.indir)
         
-    ddrs.Document.write_to_files(args.outdir, documents, args.format)
+    ddrs.Document.write_to_files(args.outdir, documents, args.output_spec)
+
 
 if __name__ == '__main__':
     _cli()
