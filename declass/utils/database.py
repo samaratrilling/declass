@@ -51,7 +51,7 @@ class DBCONNECT(object):
 
         Returns
         -------
-        output : list
+        output : dict
 
         Notes
         -----
@@ -60,8 +60,7 @@ class DBCONNECT(object):
         sql = 'select %s from Document where id = %s'%(fields, row_id)
         self.cursor.execute(sql)
         output = self.cursor.fetchall()
-        output = list(output[0])
-        return output
+        return output[0]
 
     def get_rows_by_idlist(self, id_list, table_name, fields='*', get_iter=False):
         """
@@ -171,17 +170,17 @@ if __name__ == '__main__':
     dbCon = DBCONNECT(host_name='mysql.csail.mit.edu', db_name='declassification', user_name='declass', pwd='declass')
     table_name = 'declassification'
     doc_id = 242518
-    fields = 'title'
-    #doc = dbCon.get_row_by_id(row_id=doc_id, table_name=table_name, fields=fields)
-    #print doc
+    fields = 'body'
+    doc = dbCon.get_row_by_id(row_id=doc_id, table_name=table_name, fields=fields)
+    print doc
     #doc_list = dbCon.get_rows_by_idlist(id_list=[242518, 317509], table_name=table_name, fields=fields)
     #print 'doc list ', doc_list
     #doc_list_iter = dbCon.get_rows_by_idlist(id_list=[242518, 317509], table_name=table_name, fields=fields, get_iter=True)
     #print 'doc1 ', doc_list_iter.next()
     #print 'doc2', doc_list_iter.next()
 
-    query = dbCon.run_query('select id, title from Document where sdfsd;')
-    print query
+    #query = dbCon.run_query('select id, title from Document where sdfsd;')
+    #print query
     #table_names = dbCon.get_table_names()
     #print table_names
     #field_info = dbCon.get_field_info(table_name='Document')
