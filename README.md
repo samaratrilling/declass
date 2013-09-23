@@ -9,6 +9,11 @@ Style Guide
 * Submit issues and bug reports with GitHub issues
 * Start reading the [LowClass Python style-guide](http://columbia-applied-data-science.github.io/pages/lowclass-python-style-guide.html)
 
+Performance & Style
+-------------------
+* Good programming style can lead to faster as well as cleaner code
+* Refer to the python [performance tips page](https://wiki.python.org/moin/PythonSpeed/PerformanceTips) for more info and general useful reading 
+
 Dependencies
 ------------
 
