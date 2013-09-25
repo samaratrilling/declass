@@ -310,9 +310,9 @@ class SVMLightFormatter(SparseFormatter):
         return {'target': float(preamble)}
 
 
-class TokenStreamer(object):
+class TextFileStreamer(object):
     """
-    An iterable that streams tokens from a source of text files.
+    An iterable that streams tokens (and more) from a source of text files.
     """
     def __init__(
         self, tokenizer, base_path=None, file_type='*', paths=None,
@@ -341,7 +341,7 @@ class TokenStreamer(object):
 
     def __iter__(self):
         """
-        Returns an iterator over paths returning token lists.
+        Returns an iterator over paths returning text_info dictionaries.
         """
         if self.base_path:
             paths = filefilter.get_paths(
@@ -353,6 +353,11 @@ class TokenStreamer(object):
             if index == self.limit:
                 raise StopIteration
 
+            text_info = {}
+            text_info['path'] = onepath
+            text_info['doc_id'] = filefilter.path_to_name(onepath)
+
             with open(onepath, 'r') as f:
                 text = f.read()
-                yield self.tokenizer.text_to_token_list(text)
+                text_info['tokens'] = self.tokenizer.text_to_token_list(text)
+                yield text_info
