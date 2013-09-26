@@ -95,6 +95,7 @@ class Topics(object):
         https://github.com/JohnLangford/vowpal_wabbit/wiki
 
         """
+        t0 = time()
         if not tokenizer:
             tokenizer = text_processors.TokenizerBasic()
         if load_path:
@@ -112,6 +113,9 @@ class Topics(object):
                     dictionary.dfs.iteritems() if docfreq < filter_extremes]
             dictionary.filter_tokens(low_freq_ids)
         dictionary.compactify()
+        t1 = time()
+        build_time = t1-t0
+        self._print('dictionary build time: %s'%build_time)
         if save_path:
             dictionary.save(save_path)
         self.dictionary=dictionary
@@ -127,16 +131,19 @@ class Topics(object):
             Path to save corpus to disc. 
         """
         assert self.dictionary, 'dictionary has not been created'
+        t0 = time()
         if not tokenizer:
             tokenizer = text_processors.TokenizerBasic()
         if self.paths:
             self.corpus = gensim_helpers.TextFilesCorpus(tokenizer, 
                     self.dictionary, paths=self.paths, limit=self.limit)
         else: 
-            token_stream = text_processors.VWFormatter().sfile_to_token_iter(
-                    self.sparse_corpus_path)
-            self.corpus = SimpleCorpus(self.dictionary, token_stream, 
+            self.corpus = SimpleCorpus(self.dictionary, self.sparse_corpus_path, 
                     limit=self.limit)
+        t1 = time()
+        build_time = t1-t0
+        self._print('corpus build time: %s'%build_time)
+
         if save_path:
             #compact format save
             corpora.SvmLightCorpus.serialize(save_path, self.corpus)
@@ -159,6 +166,7 @@ class Topics(object):
         chunksize : int
         """
         assert self.corpus, 'corpus has not been created'
+        self.num_topics = num_topics
         t0 = time()
         if not chunksize:
             chunksize = self.dictionary.num_docs
@@ -171,22 +179,30 @@ class Topics(object):
         self.lda = lda
         return lda
  
-    def print_topics(self, num_topics, num_words):
+    def write_topics(self, save_path, num_topics=None, num_words=5):
         """
         Prints the topics.
         
         Parameters
         ----------
+        save_path : string
+            topics file path
         num_topics : int
             number of topics to print
         num_words : int
             number of words to print with each topic
         """
-        for t in xrange(num_topics):
-            sys.stdout.write('topic %s'%t + '\n')
-            sys.stdout.write(self.lda.print_topic(t, topn=num_words) + '\n')
+        if not num_topics:
+            num_topics = self.num_topics
+        with open(save_path, 'w') as f:
+            for t in xrange(num_topics):
+                f.write('topic %s'%t + '\n')
+                f.write(self.lda.print_topic(t, topn=num_words) + '\n')
 
-    def save_topics(self, save_path, sep='|'):
+    def write_doc_topics(self, save_path, sep='|'):
+        """
+        Creates a pipe separated file with doc_id|topics scores.
+        """
         topics_df = self._format_output()
         topics_df.to_csv(save_path, sep=sep, header=False)
     
@@ -216,12 +232,13 @@ class Topics(object):
             plt.savefig(plot_path)
         return words_df
 
+
 class SimpleCorpus(object):
     """
     A simple corpus built with a dictionary and a token stream. 
     """
-    def __init__(self, dictionary, token_stream, limit):
-        self.token_stream = token_stream
+    def __init__(self, dictionary, sparse_corpus_path, limit):
+        self.sparse_corpus_path = sparse_corpus_path
         self.dictionary = dictionary
         self.limit = limit
     
@@ -231,10 +248,14 @@ class SimpleCorpus(object):
         This method is automatically called when you use MyCorpus in a for 
         loop. The returned value becomes the loop iterator.
         """
-        for index, token_list in enumerate(self.token_stream):
+        token_streamer = text_processors.VWFormatter().sfile_to_token_iter(
+                self.sparse_corpus_path)
+
+        for index, token_list in enumerate(token_streamer):
             if index == self.limit:
                 raise StopIteration
             yield self.dictionary.doc2bow(token_list)
+
 
 
 
