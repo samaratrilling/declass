@@ -12,7 +12,8 @@ from functools import partial
 Contains a collection of function that clean, decode and move files around.
 """
 
-def get_paths(base_path, file_type="*", relative=False, get_iter=False):
+def get_paths(base_path, file_type="*", relative=False, get_iter=False, 
+        limit=None):
     """
     Crawls subdirectories and returns an iterator over paths to files that
     match the file_type.
@@ -31,7 +32,7 @@ def get_paths(base_path, file_type="*", relative=False, get_iter=False):
         If True, return an iterator over paths rather than a list.
     """
     path_iter = _get_paths_iter(
-        base_path, file_type=file_type, relative=relative)
+        base_path, file_type=file_type, relative=relative, limit=limit)
 
     if get_iter:
         return path_iter
@@ -39,8 +40,8 @@ def get_paths(base_path, file_type="*", relative=False, get_iter=False):
         return [path for path in path_iter]
 
 
-def _get_paths_iter(base_path, file_type="*", relative=False):
-    path_list = []
+def _get_paths_iter(base_path, file_type="*", relative=False, limit=None):
+    counter=0
     for path, subdirs, files in os.walk(base_path, followlinks=True):
         for name in files:
             if fnmatch(name.lower(), file_type):
@@ -48,7 +49,10 @@ def _get_paths_iter(base_path, file_type="*", relative=False):
                     path = path.replace(base_path, "")
                     if path.startswith('/'):
                         path = path[1:]
+                if counter == limit:
+                    raise StopIteration
                 yield os.path.join(path, name)
+                counter+=1
 
 
 def path_to_name(path):
