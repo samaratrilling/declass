@@ -61,7 +61,7 @@ class Topics(object):
         else:
             assert self.sparse_corpus_path, (
             'neither text_base_path or sparse_corpus_path has been specified')
-            with open(sparse_corpus_path) as f:
+            with open(self.sparse_corpus_path) as f:
                 doc_ids = [line.split('|')[0].split(' ')[-1] for line in f]
                 doc_ids = doc_ids[:self.limit]
         return doc_ids
@@ -149,7 +149,7 @@ class Topics(object):
             corpora.SvmLightCorpus.serialize(save_path, self.corpus)
 
     def build_lda(self, num_topics, alpha=None, eta=None, passes=1, 
-            chunksize=None):
+            chunksize=2000, update_every=1):
         """
         Buld the lda model.
         
@@ -164,15 +164,14 @@ class Topics(object):
         passes : int
             number of passes for model build
         chunksize : int
+        update_every ; int
         """
         assert self.corpus, 'corpus has not been created'
         self.num_topics = num_topics
         t0 = time()
-        if not chunksize:
-            chunksize = self.dictionary.num_docs
         lda = models.LdaModel(self.corpus, id2word=self.dictionary, 
                 num_topics=num_topics, passes=passes, alpha=alpha, eta=eta, 
-                chunksize=chunksize)
+                chunksize=chunksize, update_every=update_every)
         t1=time()
         build_time = t1-t0
         self._print('lda build time: %s'%build_time)
@@ -258,6 +257,4 @@ class SimpleCorpus(object):
 
 
 
-
-    
 
