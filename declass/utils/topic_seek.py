@@ -5,12 +5,14 @@ import matplotlib.pylab as plt
 
 from time import time
 from gensim import corpora, models
-from declass.utils import text_processors, filefilter, gensim_helpers
+from declass.utils import text_processors, filefilter, gensim_helpers, common
+from common import lazyprop
 
 
 class Topics(object):
-    def __init__(self, text_base_path=None, file_type='*.txt', 
-            vw_corpus_path=None, limit=None, verbose=True):
+    def __init__(
+        self, text_base_path=None, file_type='*.txt', vw_corpus_path=None,
+        limit=None, verbose=False):
         """
         Convenience wrapper for for the gensim LDA module. 
         See http://radimrehurek.com/gensim/ for more details.
@@ -40,20 +42,22 @@ class Topics(object):
 
         self.dictionary = None
         self.corpora = None
-        if text_base_path:
-            self.paths = self.get_paths()
+
+        if vw_corpus_path:
+            self.formatter = text_processors.VWFormatter()
+
+    @lazyprop
+    def paths(self):
+        if self.text_base_path:
+            paths = filefilter.get_paths(
+                self.text_base_path, self.file_type, limit=self.limit)
         else:
-            self.paths = None
-        self.doc_ids = self.get_doc_ids()
-
-
-    def get_paths(self):
-        paths = filefilter.get_paths(
-            self.text_base_path, self.file_type, limit=self.limit)
+            paths = None
 
         return paths
 
-    def get_doc_ids(self):
+    @lazyprop
+    def doc_ids(self):
         """
         Gets the doc ids. If self.paths is None, ass
         """
@@ -62,15 +66,19 @@ class Topics(object):
         else:
             assert self.vw_corpus_path, (
             'neither text_base_path or vw_corpus_path has been specified')
+            doc_ids = []
             with open(self.vw_corpus_path) as f:
-                doc_ids = [line.split('|')[0].split(' ')[-1] for line in f]
-                doc_ids = doc_ids[:self.limit]
+                for i, line in enumerate(f):
+                    if i == self.limit:
+                        break
+                    doc_dict = self.formatter.sstr_to_dict(line)
+                    doc_ids.append(doc_dict['doc_id'])
 
         return doc_ids
 
     def set_dictionary(
-        self, tokenizer=None, filter_extremes=1, load_path=None, no_below=5,
-        no_above=0.5, save_path=None):
+        self, tokenizer=None, load_path=None, no_below=5, no_above=0.5,
+        save_path=None):
         """
         Convert token stream into a dictionary, setting self.dictionary.
         
@@ -107,8 +115,7 @@ class Topics(object):
                 token_stream = text_processors.TokenStreamer(
                         tokenizer, paths=self.paths, limit=self.limit)
             else:
-                token_stream = text_processors.VWFormatter(
-                    ).sfile_to_token_iter(
+                token_stream = self.formatter.sfile_to_token_iter(
                         self.vw_corpus_path, limit=self.limit)
             dictionary = corpora.Dictionary(token_stream)
         dictionary.filter_extremes(no_below=no_below, no_above=no_above)
@@ -132,6 +139,7 @@ class Topics(object):
         """
         assert self.dictionary, 'dictionary has not been created'
         t0 = time()
+
         if not tokenizer:
             tokenizer = text_processors.TokenizerBasic()
 
@@ -141,6 +149,7 @@ class Topics(object):
         else: 
             self.corpus = VWCorpus(
                 self.dictionary, self.vw_corpus_path, limit=self.limit)
+
         t1 = time()
         build_time = t1-t0
         self._print('corpus build time: %s'%build_time)
@@ -149,8 +158,9 @@ class Topics(object):
             #compact format save
             corpora.SvmLightCorpus.serialize(save_path, self.corpus)
 
-    def build_lda(self, num_topics, alpha=None, eta=None, passes=1, 
-            chunksize=2000, update_every=1):
+    def build_lda(
+        self, num_topics, alpha=None, eta=None, passes=1, chunksize=2000,
+        update_every=1):
         """
         Buld the lda model.
         
@@ -168,6 +178,7 @@ class Topics(object):
         update_every ; int
         """
         assert self.corpus, 'corpus has not been created'
+
         self.num_topics = num_topics
         t0 = time()
         lda = models.LdaModel(self.corpus, id2word=self.dictionary, 
@@ -177,6 +188,7 @@ class Topics(object):
         build_time = t1-t0
         self._print('lda build time: %s'%build_time)
         self.lda = lda
+
         return lda
  
     def write_topics(self, save_path, num_words=5):
@@ -187,10 +199,8 @@ class Topics(object):
         ----------
         save_path : string
             topics file path
-        num_topics : int
-            number of topics to print
         num_words : int
-            number of words to print with each topic
+            number of words to write with each topic
         """
         with open(save_path, 'w') as f:
             for t in xrange(self.num_topics):
@@ -199,7 +209,7 @@ class Topics(object):
 
     def write_doc_topics(self, save_path, sep='|'):
         """
-        Creates a pipe separated file with doc_id|topics scores.
+        Creates a delimited file with doc_id and topics scores.
         """
         topics_df = self._get_topics_df()
         topics_df.to_csv(save_path, sep=sep, header=True)
@@ -232,6 +242,7 @@ class Topics(object):
             plt.figure()
             words_df.docfreq.apply(np.log10).hist(bins=200)
             plt.savefig(plot_path)
+
         return words_df
 
 
