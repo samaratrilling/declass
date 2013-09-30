@@ -32,7 +32,7 @@ def _cli():
 
     target is e.g. 0 or 1 for classification, 
     weight is an importance weight, 
-    tag identifies the record and must be preceeded by a single-quote '
+    doc_id identifies the record and must be preceeded by a single-quote '
     scores default to 1,
     """
     parser = argparse.ArgumentParser(
@@ -51,18 +51,21 @@ def _cli():
         help='Write to OUT_FILE rather than sys.stdout.')
     parser.add_argument(
         '-t', '--tokenizer_type', default='basic',
-        help='Use TOKENIZER_TYPE to tokenize the raw text')
+        help='Use TOKENIZER_TYPE to tokenize the raw text.  '
+        '[default: %(default)s]')
     parser.add_argument(
         '--name_level', default=1, type=int,
         help='Form the record name using items this far back in the path'
         ' e.g. if name_level == 2, and path = mydata/1234/3.txt, then we will'
-        ' have name = 1234_3')
+        ' have name = 1234_3.  [default: %(default)s]')
     parser.add_argument(
         '--n_jobs', help="Use n_jobs to tokenize files.",
         type=int, default=1)
     parser.add_argument(
-        '--chunksize', help="Have workers process CHUNKSIZE files at a time.",
-        type=int, default=1000)
+        '--chunksize', type=int, default=1000, 
+        help="Have workers process CHUNKSIZE files at a time.  "
+        "[default: %(default)s]")
+        
 
     # Parse and check args
     args = parser.parse_args()
@@ -88,7 +91,7 @@ def tokenize(
     assert (paths == []) or (base_path is None)
 
     if base_path:
-        paths = filefilter.get_paths(base_path, file_type='*')
+        paths = filefilter.get_paths(base_path, file_type='*', get_iter=True)
 
     tokenizer_dict = {'basic': text_processors.TokenizerBasic}
     tokenizer = tokenizer_dict[tokenizer_type]()
@@ -115,8 +118,8 @@ def _tokenize_one(tokenizer, formatter, name_level, path):
     tokens = tokenizer.text_to_counter(text)
 
     # Format
-    tag = filefilter.path_to_newname(path, name_level=name_level)
-    tok_sstr = formatter.get_sstr(tokens, importance=1, tag=tag)
+    doc_id = filefilter.path_to_newname(path, name_level=name_level)
+    tok_sstr = formatter.get_sstr(tokens, importance=1, doc_id=doc_id)
 
     return tok_sstr
 
