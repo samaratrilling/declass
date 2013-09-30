@@ -10,13 +10,14 @@ from common import lazyprop
 
 
 class Topics(object):
+    """
+    Convenience wrapper for for the gensim LDA module. 
+    See http://radimrehurek.com/gensim/ for more details.
+    """
     def __init__(
         self, text_base_path=None, file_type='*.txt', vw_corpus_path=None,
         limit=None, verbose=False):
         """
-        Convenience wrapper for for the gensim LDA module. 
-        See http://radimrehurek.com/gensim/ for more details.
-        
         Parameters
         ----------
         text_base_path : string or None
@@ -39,9 +40,6 @@ class Topics(object):
         self.file_type = file_type
         self.vw_corpus_path = vw_corpus_path
         self.limit = limit
-
-        self.dictionary = None
-        self.corpora = None
 
         if vw_corpus_path:
             self.formatter = text_processors.VWFormatter()
@@ -125,7 +123,8 @@ class Topics(object):
 
         if save_path:
             dictionary.save(save_path)
-        self.dictionary=dictionary
+
+        self.dictionary = dictionary
 
     def set_corpus(self, tokenizer=None, save_path=None):
         """
@@ -137,7 +136,6 @@ class Topics(object):
         save_path : string
             Path to save corpus to disc. 
         """
-        assert self.dictionary, 'dictionary has not been created'
         t0 = time()
 
         if not tokenizer:
@@ -146,7 +144,7 @@ class Topics(object):
         if self.paths:
             self.corpus = gensim_helpers.TextFilesCorpus(
                 tokenizer, self.dictionary, paths=self.paths, limit=self.limit)
-        else: 
+        elif self.vw_corpus_path: 
             self.corpus = VWCorpus(
                 self.dictionary, self.vw_corpus_path, limit=self.limit)
 
@@ -177,8 +175,6 @@ class Topics(object):
         chunksize : int
         update_every ; int
         """
-        assert self.corpus, 'corpus has not been created'
-
         self.num_topics = num_topics
         t0 = time()
         lda = models.LdaModel(self.corpus, id2word=self.dictionary, 
