@@ -10,10 +10,10 @@ from declass.utils import text_processors, filefilter, gensim_helpers
 
 class Topics(object):
     def __init__(self, text_base_path=None, file_type='*.txt', 
-            sparse_corpus_path=None, limit=None, verbose=True):
+            vw_corpus_path=None, limit=None, verbose=True):
         """
-        A wrapper class for the gensim LDA module. See 
-        http://radimrehurek.com/gensim/ for more details.
+        Convenience wrapper for for the gensim LDA module. 
+        See http://radimrehurek.com/gensim/ for more details.
         
         Parameters
         ----------
@@ -21,8 +21,8 @@ class Topics(object):
             Base path to dir containing files.
         file_type : string
             File types to filter by.
-        sparse_corpus_path : string None
-            Path to corpus saved in sparse format. 
+        vw_corpus_path : string None
+            Path to corpus saved in sparse VW format. 
         limit : int or None
             Limit for number of docs processed.
         verbose : bool
@@ -31,13 +31,13 @@ class Topics(object):
         -----
         If text_base_path is None assumes that sparse_corpus_path will be 
         specified. Current supports on VW sparse format.
-
         """
         self.verbose = verbose
         self.text_base_path = text_base_path
         self.file_type = file_type
-        self.sparse_corpus_path = sparse_corpus_path
+        self.vw_corpus_path = vw_corpus_path
         self.limit = limit
+
         self.dictionary = None
         self.corpora = None
         if text_base_path:
@@ -48,8 +48,9 @@ class Topics(object):
 
 
     def get_paths(self):
-        paths = filefilter.get_paths(self.text_base_path, self.file_type, 
-                limit=self.limit)
+        paths = filefilter.get_paths(
+            self.text_base_path, self.file_type, limit=self.limit)
+
         return paths
 
     def get_doc_ids(self):
@@ -59,17 +60,19 @@ class Topics(object):
         if self.paths:
             doc_ids = [filefilter.path_to_name(path) for path in self.paths]
         else:
-            assert self.sparse_corpus_path, (
-            'neither text_base_path or sparse_corpus_path has been specified')
-            with open(self.sparse_corpus_path) as f:
+            assert self.vw_corpus_path, (
+            'neither text_base_path or vw_corpus_path has been specified')
+            with open(self.vw_corpus_path) as f:
                 doc_ids = [line.split('|')[0].split(' ')[-1] for line in f]
                 doc_ids = doc_ids[:self.limit]
+
         return doc_ids
 
-    def set_dictionary(self, tokenizer=None, filter_extremes=1, 
-            load_path=None, save_path=None):
+    def set_dictionary(
+        self, tokenizer=None, filter_extremes=1, load_path=None, no_below=5,
+        no_above=0.5, save_path=None):
         """
-        Convert token stream into a dictionary.
+        Convert token stream into a dictionary, setting self.dictionary.
         
         Parameters
         ----------
@@ -83,39 +86,36 @@ class Topics(object):
             filter out words of low count
         load_path : string
             path to saved dictionary 
+        no_below : Integer
+            Do not keep words with total count below no_below
+        no_above : Real number in [0, 1]
+            Do not keep words whose total count is more than no_above fraction
+            of the total word count.
         save_path : string
             path to save dictionary
-        vw_corpus_path : string
-            path to vw sparse format tokenized text 
-       
-        Notes
-        -----
-        If load_path is not provided the function will use self.paths to build
-        the dictionary. For more information on vw see 
-        https://github.com/JohnLangford/vowpal_wabbit/wiki
-
         """
         t0 = time()
         if not tokenizer:
             tokenizer = text_processors.TokenizerBasic()
+
+        # Either load a pre-made dict, or create a new one using __init__
+        # parameters.
         if load_path:
             dictionary = corpora.Dictionary.load(load_path)
         else:
             if self.paths:
-                token_stream = text_processors.TokenStreamer(tokenizer, 
-                        paths=self.paths, limit=self.limit)
+                token_stream = text_processors.TokenStreamer(
+                        tokenizer, paths=self.paths, limit=self.limit)
             else:
                 token_stream = text_processors.VWFormatter(
-                        ).sfile_to_token_iter(self.sparse_corpus_path)
+                    ).sfile_to_token_iter(
+                        self.vw_corpus_path, limit=self.limit)
             dictionary = corpora.Dictionary(token_stream)
-        if filter_extremes:
-            low_freq_ids = [tokenid for tokenid, docfreq in 
-                    dictionary.dfs.iteritems() if docfreq < filter_extremes]
-            dictionary.filter_tokens(low_freq_ids)
+        dictionary.filter_extremes(no_below=no_below, no_above=no_above)
         dictionary.compactify()
-        t1 = time()
-        build_time = t1-t0
-        self._print('dictionary build time: %s'%build_time)
+
+        self._print('dictionary build time: %.2f' % (time() - t0))
+
         if save_path:
             dictionary.save(save_path)
         self.dictionary=dictionary
@@ -134,12 +134,13 @@ class Topics(object):
         t0 = time()
         if not tokenizer:
             tokenizer = text_processors.TokenizerBasic()
+
         if self.paths:
-            self.corpus = gensim_helpers.TextFilesCorpus(tokenizer, 
-                    self.dictionary, paths=self.paths, limit=self.limit)
+            self.corpus = gensim_helpers.TextFilesCorpus(
+                tokenizer, self.dictionary, paths=self.paths, limit=self.limit)
         else: 
-            self.corpus = SimpleCorpus(self.dictionary, self.sparse_corpus_path, 
-                    limit=self.limit)
+            self.corpus = VWCorpus(
+                self.dictionary, self.vw_corpus_path, limit=self.limit)
         t1 = time()
         build_time = t1-t0
         self._print('corpus build time: %s'%build_time)
@@ -178,9 +179,9 @@ class Topics(object):
         self.lda = lda
         return lda
  
-    def write_topics(self, save_path, num_topics=None, num_words=5):
+    def write_topics(self, save_path, num_words=5):
         """
-        Prints the topics.
+        Writes the topics to disk.
         
         Parameters
         ----------
@@ -191,10 +192,8 @@ class Topics(object):
         num_words : int
             number of words to print with each topic
         """
-        if not num_topics:
-            num_topics = self.num_topics
         with open(save_path, 'w') as f:
-            for t in xrange(num_topics):
+            for t in xrange(self.num_topics):
                 f.write('topic %s'%t + '\n')
                 f.write(self.lda.print_topic(t, topn=num_words) + '\n')
 
@@ -202,13 +201,17 @@ class Topics(object):
         """
         Creates a pipe separated file with doc_id|topics scores.
         """
-        topics_df = self._format_output()
-        topics_df.to_csv(save_path, sep=sep, header=False)
+        topics_df = self._get_topics_df()
+        topics_df.to_csv(save_path, sep=sep, header=True)
     
-    def _format_output(self):
+    def _get_topics_df(self):
         topics_df = pd.concat((pd.Series(dict(doc)) for doc in 
             self.lda[self.corpus]), axis=1).fillna(0).T
         topics_df.index = self.doc_ids
+        topics_df.index.name = 'doc_id'
+        topics_df = topics_df.rename(
+            columns={i: 'topic_' + str(i) for i in topics_df.columns})
+
         return topics_df
             
     def _print(self, msg):
@@ -232,12 +235,12 @@ class Topics(object):
         return words_df
 
 
-class SimpleCorpus(object):
+class VWCorpus(object):
     """
-    A simple corpus built with a dictionary and a token stream. 
+    A simple corpus built with a dictionary and a VW token stream. 
     """
-    def __init__(self, dictionary, sparse_corpus_path, limit):
-        self.sparse_corpus_path = sparse_corpus_path
+    def __init__(self, dictionary, vw_corpus_path, limit):
+        self.vw_corpus_path = vw_corpus_path
         self.dictionary = dictionary
         self.limit = limit
     
@@ -248,7 +251,7 @@ class SimpleCorpus(object):
         loop. The returned value becomes the loop iterator.
         """
         token_streamer = text_processors.VWFormatter().sfile_to_token_iter(
-                self.sparse_corpus_path)
+                self.vw_corpus_path, limit=self.limit)
 
         for index, token_list in enumerate(token_streamer):
             if index == self.limit:
