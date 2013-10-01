@@ -4,6 +4,9 @@ Classes for streaming tokens/info from files/sparse files etc...
 from . import filefilter, nlp, common, text_processors
 from common import lazyprop
 
+import pandas as pd
+import re 
+
 
 class BaseStreamer(object):
     """
@@ -146,9 +149,11 @@ class TextFileStreamer(BaseStreamer):
     """
     For streaming from text files.
     """
-    def __init__(self, text_base_path=None, file_type='*.txt'):
+    def __init__(self, text_base_path=None, file_type='*.txt', 
+            name_strip=r'\..*'):
         self.text_base_path = text_base_path
         self.file_type = file_type
+        self.name_strip = name_strip
     
     @lazyprop
     def paths(self):
@@ -157,7 +162,7 @@ class TextFileStreamer(BaseStreamer):
         """
         if self.text_base_path:
             paths = filefilter.get_paths(
-                self.text_base_path, self.file_type, limit=self.limit)
+                self.text_base_path, self.file_type, self.limit)
         else:
             paths = None
 
@@ -170,7 +175,7 @@ class TextFileStreamer(BaseStreamer):
         """
         regex = re.compile(self.name_strip)
         doc_ids = [
-            regex.sub('', path_to_name(p, strip_ext=False))
+            regex.sub('', filefilter.path_to_name(p, strip_ext=False))
             for p in self.paths]
 
         return doc_ids
@@ -183,20 +188,30 @@ class TextFileStreamer(BaseStreamer):
         """
         return dict(zip(self.doc_ids, self.paths))
 
-    def info_stream(self, limit=None):
+    def info_stream(self, paths=None, doc_ids=None, limit=None):
         """
         Returns an iterator over paths returning token lists.
         """
+        self.limit = limit
+        #import pdb; pdb.set_trace()
+
+        if doc_ids:
+            doc_ids = [str(doc) for doc in doc_ids]
+            doc_id_paths = pd.Series(self._doc_id_to_path)
+            doc_id_paths = doc_id_paths.reindex(index=doc_ids)
+            paths = doc_id_paths.values
+        elif paths==None:            
+            paths = self.paths
 
         for index, onepath in enumerate(paths):
-            if index == self.limit:
+            if index == limit:
                 raise StopIteration
 
             with open(onepath, 'r') as f:
                 text = f.read()
                 doc_id = filefilter.path_to_name(onepath)
-                yield {'item': text, 'info': {'path': onepath, 
-                    'doc_id': doc_id}}            
+                yield {'text': text, 'path': onepath, 
+                        'doc_id': doc_id}            
 
         
 
