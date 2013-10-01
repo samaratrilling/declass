@@ -91,22 +91,24 @@ class SparseFormatter(object):
 
         return feature_values
 
-    def get_dict(self, record_str):
+    def sstr_to_dict(self, sstr):
         """
-        Returns a dict representation of record_str.
+        Returns a dict representation of sparse record string.
         
         Parameters
         ----------
-        record_str : String
+        sstr : String
             String representation of one record.
 
         Returns
         -------
         record_dict : Dict
-            possible keys = 'target', 'importance', 'tag', 'feature_values'
+            possible keys = 'target', 'importance', 'doc_id', 'feature_values'
         """
-        idx = record_str.index(self.preamble_char)
-        preamble, feature_str = record_str[:idx], record_str[idx + 1:]
+        sstr = sstr.rstrip('\n').rstrip('\r')
+
+        idx = sstr.index(self.preamble_char)
+        preamble, feature_str = sstr[:idx], sstr[idx + 1:]
 
         record_dict = self._parse_preamble(preamble)
 
@@ -114,25 +116,28 @@ class SparseFormatter(object):
 
         return record_dict
 
-    def sstr_to_token_list(self, record_str):
+    def sstr_to_info(self, sstr):
         """
-        Convertes a sparse record string to a list of tokens (with repeats)
-        corresponding to record_str.
-
-        E.g. if record_str represented the dict {'hi': 2, 'bye': 1}, then
-        token_list = ['hi', 'hi', 'bye']  (up to permutation).
+        Returns the full info dictionary corresponding to a sparse record
+        string.  This holds "everything."
 
         Parameters
         ----------
-        record_str : String
-            Formatted according to self.format_name
-            Note that the values in record_str must be integers.
+        sstr : String
+            String representation of one record.
 
         Returns
         -------
-        token_list : List of Strings
+        info : Dict
+            possible keys = 'tokens', 'target', 'importance', 'doc_id',
+                'feature_values', etc...
         """
-        record_dict = self.get_dict(record_str)
+        info = self.sstr_to_dict(sstr)
+        info['tokens'] = self._dict_to_tokens(info)
+
+        return info
+
+    def _dict_to_tokens(self, record_dict):
         token_list = []
         if 'feature_values' in record_dict:
             for feature, value in record_dict['feature_values'].iteritems():
@@ -142,7 +147,28 @@ class SparseFormatter(object):
 
         return token_list
 
-    def sfile_to_token_iter(self, filepath_or_buffer):
+    def sstr_to_token_list(self, sstr):
+        """
+        Convertes a sparse record string to a list of tokens (with repeats)
+        corresponding to sstr.
+
+        E.g. if sstr represented the dict {'hi': 2, 'bye': 1}, then
+        token_list = ['hi', 'hi', 'bye']  (up to permutation).
+
+        Parameters
+        ----------
+        sstr : String
+            Formatted according to self.format_name
+            Note that the values in sstr must be integers.
+
+        Returns
+        -------
+        token_list : List of Strings
+        """
+        record_dict = self.sstr_to_dict(sstr)
+        return self._dict_to_tokens(record_dict)
+
+    def sfile_to_token_iter(self, filepath_or_buffer, limit=None):
         """
         Return an iterator over filepath_or_buffer that returns, line-by-line,
         a token_list.
@@ -159,8 +185,9 @@ class SparseFormatter(object):
         """
         open_file, was_path = common.openfile_wrap(filepath_or_buffer, 'r')
 
-        for line in open_file:
-            line = line.rstrip('\n').rstrip('\r')
+        for index, line in enumerate(open_file):
+            if index == limit:
+                raise StopIteration
             yield self.sstr_to_token_list(line)
 
         if was_path:
@@ -181,7 +208,7 @@ class VWFormatter(SparseFormatter):
         self.preamble_char = '|'
 
     def get_sstr(
-        self, feature_values=None, target=None, importance=None, tag=None):
+        self, feature_values=None, target=None, importance=None, doc_id=None):
         """
         Return a string reprsenting one record in sparse VW format:
 
@@ -193,7 +220,7 @@ class VWFormatter(SparseFormatter):
             The value we are trying to predict.
         importance : Real number
             The importance weight to associate to this example.
-        tag : Number or string
+        doc_id : Number or string
             A name for this example.
 
         Returns
@@ -201,12 +228,12 @@ class VWFormatter(SparseFormatter):
         formatted : String
             Formatted in VW format
         """
-        if tag:
-            # If tag, then we must have importance.
-            # The tag sits right against the pipe.
+        if doc_id:
+            # If doc_id, then we must have importance.
+            # The doc_id sits right against the pipe.
             assert importance is not None
-            formatted = " %s|" % tag
-            # If no tag, insert a space to the left of the pipe.
+            formatted = " %s|" % doc_id
+            # If no doc_id, insert a space to the left of the pipe.
         else:
             formatted = " |"
 
@@ -228,17 +255,17 @@ class VWFormatter(SparseFormatter):
     def _parse_preamble(self, preamble):
         """
         Parse the VW preamble: [target] [Importance [Tag]]
-        and return a dict with keys 'tag', 'target', 'importance' iff
+        and return a dict with keys 'doc_id', 'target', 'importance' iff
         the corresponding values were found in the preamble.
         """
         # If preamble was butted directly against a pipe, then the right-most
-        # part is a tag....extract it and continue.
+        # part is a doc_id....extract it and continue.
         if preamble[-1] != ' ':
-            tag_left = preamble.rfind(' ')
-            tag = preamble[tag_left + 1:]
-            preamble = preamble[: tag_left]
+            doc_id_left = preamble.rfind(' ')
+            doc_id = preamble[doc_id_left + 1:]
+            preamble = preamble[: doc_id_left]
         else:
-            tag = None
+            doc_id = None
 
         # Step from left to right through preamble.  
         # We are in the target until we encounter the first space...if there
@@ -255,7 +282,8 @@ class VWFormatter(SparseFormatter):
                 importance += char
 
         parsed = {}
-        items = (('tag', tag), ('target', target), ('importance', importance))
+        items = (
+            ('doc_id', doc_id), ('target', target), ('importance', importance))
         for key, value in items:
             if value:
                 parsed[key] = value
@@ -281,7 +309,7 @@ class SVMLightFormatter(SparseFormatter):
         self.preamble_char = ' '
 
     def get_sstr(
-        self, feature_values=None, target=1, importance=None, tag=None):
+        self, feature_values=None, target=1, importance=None, doc_id=None):
         """
         Return a string reprsenting one record in SVM-Light sparse format
         <line> .=. <target> <feature>:<value> <feature>:<value>
