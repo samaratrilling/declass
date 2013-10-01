@@ -2,6 +2,8 @@
 Classes for streaming tokens/info from files/sparse files etc...
 """
 from . import filefilter, nlp, common, text_processors
+from common import lazyprop
+
 
 class BaseStreamer(object):
     """
@@ -85,4 +87,59 @@ class TextFileStreamer(BaseStreamer):
     """
     For streaming from text files.
     """
-    pass
+    def __init__(self, text_base_path=None, file_type='*.txt'):
+        self.text_base_path = text_base_path
+        self.file_type = file_type
+    
+    @lazyprop
+    def paths(self):
+        """
+        Get all paths that we will use.
+        """
+        if self.text_base_path:
+            paths = filefilter.get_paths(
+                self.text_base_path, self.file_type, limit=self.limit)
+        else:
+            paths = None
+
+        return paths
+
+    @lazyprop
+    def doc_ids(self):
+        """
+        Get doc_ids corresponding to all paths.
+        """
+        regex = re.compile(self.name_strip)
+        doc_ids = [
+            regex.sub('', path_to_name(p, strip_ext=False))
+            for p in self.paths]
+
+        return doc_ids
+
+    @lazyprop
+    def _doc_id_to_path(self):
+        """
+        Build the dictionary mapping doc_id to path.  doc_id is based on
+        the filename.
+        """
+        return dict(zip(self.doc_ids, self.paths))
+
+    def info_stream(self, limit=None):
+        """
+        Returns an iterator over paths returning token lists.
+        """
+
+        for index, onepath in enumerate(paths):
+            if index == self.limit:
+                raise StopIteration
+
+            with open(onepath, 'r') as f:
+                text = f.read()
+                doc_id = filefilter.path_to_name(onepath)
+                yield {'item': text, 'info': {'path': onepath, 
+                    'doc_id': doc_id}}            
+
+        
+
+
+
