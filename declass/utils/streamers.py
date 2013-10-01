@@ -17,9 +17,8 @@ class BaseStreamer(object):
             The single item to pull from info and stream.
         limit : Integer
             Limit returned results to this number
-        cache_list : Cache these items as they appear
-            Call self.token_stream('doc_id', 'tokens') to cache
-            info['doc_id'] and info['tokens'] (assuming both are available).
+        cache_list : List of strings
+            Cache these items on every iteration
         """
         # Initialize the cached items as attributes
         for cache_item in cache_list:
@@ -41,8 +40,6 @@ class BaseStreamer(object):
 
         Parameters
         ----------
-        item : String
-            The single item to pull from info and stream.
         limit : Integer
             Limit returned results to this number
         cache_list : Cache these items as they appear
@@ -63,13 +60,15 @@ class VWStreamer(BaseStreamer):
         sfile : File path or buffer
             Points to a sparse (VW) formatted file.
         """
-        self.formatter = text_processors.VWFormatter()
         self.sfile = sfile
+
+        self.formatter = text_processors.VWFormatter()
 
     def info_stream(self, limit=None):
         """
         Returns an iterator over info dicts.
         """
+        # Open file if path.  If buffer or StringIO, passthrough.
         infile, was_path = common.openfile_wrap(self.sfile, 'rb')
 
         for i, line in enumerate(infile):
