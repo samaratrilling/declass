@@ -9,8 +9,12 @@ class BaseStreamer(object):
     """
     def single_stream(self, item, limit=None, cache_list=[]):
         """
+        Stream a single item from source.
+
         Parameters
         ----------
+        item : String
+            The single item to pull from info and stream.
         limit : Integer
             Limit returned results to this number
         cache_list : Cache these items as they appear
@@ -34,9 +38,18 @@ class BaseStreamer(object):
     def token_stream(self, limit=None, cache_list=[]):
         """
         Returns an iterator over tokens with possible caching of other info.
+
+        Parameters
+        ----------
+        item : String
+            The single item to pull from info and stream.
+        limit : Integer
+            Limit returned results to this number
+        cache_list : Cache these items as they appear
+            Call self.token_stream('doc_id', 'tokens') to cache
+            info['doc_id'] and info['tokens'] (assuming both are available).
         """
         return self.single_stream('tokens', limit=limit, cache_list=cache_list)
-    token_stream.__doc__ += single_stream.__doc__
 
 
 class VWStreamer(BaseStreamer):
