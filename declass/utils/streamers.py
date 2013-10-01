@@ -162,7 +162,8 @@ class TextFileStreamer(BaseStreamer):
         """
         if self.text_base_path:
             paths = filefilter.get_paths(
-                self.text_base_path, self.file_type, self.limit)
+                self.text_base_path, file_type=self.file_type, 
+                limit=self.limit)
         else:
             paths = None
 
