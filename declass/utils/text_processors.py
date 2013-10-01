@@ -1,15 +1,14 @@
 from collections import Counter
 from functools import partial
 
+import nltk
+
 from . import filefilter, nlp, common
 
 
-class TokenizerBasic(object):
+class BaseTokenizer(object):
     """
-    A simple tokenizer.  Extracts word counts from text.
-
-    Keeps only non-stopwords, converts to lowercase,
-    keeps words of length >=2.
+    Base class, don't use directly.
     """
     def text_to_counter(self, text):
         """
@@ -27,24 +26,6 @@ class TokenizerBasic(object):
             values = counts of the tokens in text
         """
         return Counter(self.text_to_token_list(text))
-        
-    def text_to_token_list(self, text):
-        """
-        Return a list of tokens.  
-        Filter/transform words according to the scheme this Tokenizer uses.
-
-        Parameters
-        ----------
-        text : String
-
-        Returns
-        -------
-        tokens : List
-            Tokenized text, e.g. ['hello', 'my', 'name', 'is', 'ian']
-        """
-        tokens = nlp.word_tokenize(text, L=2, numeric=False)
-
-        return [word.lower() for word in tokens if not nlp.is_stopword(word)]
 
     def path_to_token_list(self, path):
         """
@@ -65,6 +46,78 @@ class TokenizerBasic(object):
             text = f.read()
 
         return self.text_to_token_list(text)
+
+
+class TokenizerBasic(BaseTokenizer):
+    """
+    A simple tokenizer.  Extracts word counts from text.
+
+    Keeps only non-stopwords, converts to lowercase,
+    keeps words of length >=2.
+    """
+    def text_to_token_list(self, text):
+        """
+        Return a list of tokens.  
+        Filter/transform words according to the scheme this Tokenizer uses.
+
+        Parameters
+        ----------
+        text : String
+
+        Returns
+        -------
+        tokens : List
+            Tokenized text, e.g. ['hello', 'my', 'name', 'is', 'ian']
+        """
+        tokens = nlp.word_tokenize(text, L=2, numeric=False)
+
+        return [word.lower() for word in tokens if not nlp.is_stopword(word)]
+
+
+class TokenizerPOSFilter(BaseTokenizer):
+    """
+    Tokenizes, does POS tagging, then keeps words that match particular POS.
+    """
+    def __init__(
+        self, pos_types=[], sent_tokenizer=nltk.sent_tokenize,
+        word_tokenizer=nltk.word_tokenize, pos_tagger=nltk.pos_tag):
+        """
+        Parameters
+        ----------
+        pos_types : List of Strings
+            Parts of Speech to keep
+        sent_tokenizer : Sentence tokenizer function
+            Splits text into a list of sentences (each sentence is a string)
+        word_tokenizer : Word tokenizer function
+            Splits strings into a list of words (each word is a string)
+        pos_tagger : POS tagging function
+            Given a list of words, returns a list of tuples (word, POS)
+        """
+        self.pos_types = set(pos_types)
+        self.sent_tokenizer = sent_tokenizer
+        self.word_tokenizer = word_tokenizer
+        self.pos_tagger = pos_tagger
+
+    def text_to_token_list(self, text):
+        """
+        Tokenize a list of text that (possibly) includes multiple sentences.
+        """
+        # sentences = [['I am Ian.'], ['Who are you?']]
+        sentences = self.sent_tokenizer(text)
+        # tokenized_sentences = [['I', 'am', 'Ian.'], ['Who', 'are', 'you?']]
+        tokenized_sentences = [self.word_tokenizer(sent) for sent in sentences]
+        # tagged_sentences = [[('I', 'PRP'), ('am', 'VBP'), ...]]
+        tagged_sentences = [
+            self.pos_tagger(sent) for sent in tokenized_sentences]
+
+        # Returning a list of words that meet the filter criteria
+        token_list = sum(
+            [self._sent_filter(sent) for sent in tagged_sentences], [])
+
+        return token_list
+
+    def _sent_filter(self, tokenized_sent):
+       return [word for (word, pos) in tokenized_sent if pos in self.pos_types] 
 
 
 class SparseFormatter(object):
