@@ -8,6 +8,9 @@ import subprocess
 from numpy.random import rand
 from functools import partial
 
+from . import common
+from common import lazyprop
+
 """
 Contains a collection of function that clean, decode and move files around.
 """
@@ -55,14 +58,15 @@ def _get_paths_iter(base_path, file_type="*", relative=False, limit=None):
                 counter+=1
 
 
-def path_to_name(path):
+def path_to_name(path, strip_ext=True):
     """
     Takes one path and returns the filename, excluding the extension.
     """
-    head, tail = os.path.split(path)
-    filename, ext = os.path.splitext(tail)
+    head, name = os.path.split(path)
+    if strip_ext:
+        name, ext = os.path.splitext(name)
 
-    return filename
+    return name
 
 
 def path_to_newname(path, name_level=1):
@@ -107,3 +111,69 @@ def paths_to_files_iter(paths, mode='r'):
         yield open(path.strip(), mode=mode)
 
 
+class PathFinder(object):
+    """
+    Find and access paths in a directory tree.
+    """
+    def __init__(
+        self, text_base_path=None, file_type='*', name_strip=r'\..*',
+        limit=None):
+        """
+        Parameters
+        ----------
+        text_base_path : String
+            Base path that will be crawled to find paths.
+        file_type : String
+            Glob expression filtering the file type
+        name_strip : String (Regex)
+            To convert filenames to doc_ids, we strip this pattern
+            Default pattern r'\..*' strips everything after the first period
+        limit : Integer
+            Limit the paths returned to this number
+        """
+        self.text_base_path = text_base_path
+        self.file_type = file_type
+        self.name_strip = name_strip
+        self.limit = limit
+
+    @lazyprop
+    def paths(self):
+        """
+        Get all paths that we will use.
+        """
+        if self.text_base_path:
+            paths = filefilter.get_paths(
+                self.text_base_path, self.file_type, limit=self.limit)
+        else:
+            paths = None
+
+        return paths
+
+    @lazyprop
+    def doc_ids(self):
+        """
+        Get doc_ids corresponding to all paths.
+        """
+        regex = re.compile(self.name_strip)
+        doc_ids = [
+            regex.sub('', path_to_name(p, strip_ext=False))
+            for p in self.paths]
+
+        return doc_ids
+
+    @lazyprop
+    def _doc_id_to_path(self):
+        """
+        Build the dictionary mapping doc_id to path.  doc_id is based on
+        the filename.
+        """
+        return dict(zip(self.doc_ids, self.paths))
+        
+    def __getitem__(self, identifiers):
+        """
+        self[identifiers] returns a list of paths corresponding to identifiers.
+        """
+        if isinstance(identifiers, str):
+            identifiers = [identifiers]
+
+        return [self._doc_id_to_path[str(doc_id)] for doc_id in identifiers]

@@ -116,6 +116,37 @@ class SparseFormatter(object):
 
         return record_dict
 
+    def sstr_to_info(self, sstr):
+        """
+        Returns the full info dictionary corresponding to a sparse record
+        string.  This holds "everything."
+
+        Parameters
+        ----------
+        sstr : String
+            String representation of one record.
+
+        Returns
+        -------
+        info : Dict
+            possible keys = 'tokens', 'target', 'importance', 'doc_id',
+                'feature_values', etc...
+        """
+        info = self.sstr_to_dict(sstr)
+        info['tokens'] = self._dict_to_tokens(info)
+
+        return info
+
+    def _dict_to_tokens(self, record_dict):
+        token_list = []
+        if 'feature_values' in record_dict:
+            for feature, value in record_dict['feature_values'].iteritems():
+                int_value = int(value)
+                assert int_value == value
+                token_list += [feature] * int_value
+
+        return token_list
+
     def sstr_to_token_list(self, sstr):
         """
         Convertes a sparse record string to a list of tokens (with repeats)
@@ -135,14 +166,7 @@ class SparseFormatter(object):
         token_list : List of Strings
         """
         record_dict = self.sstr_to_dict(sstr)
-        token_list = []
-        if 'feature_values' in record_dict:
-            for feature, value in record_dict['feature_values'].iteritems():
-                int_value = int(value)
-                assert int_value == value
-                token_list += [feature] * int_value
-
-        return token_list
+        return self._dict_to_tokens(record_dict)
 
     def sfile_to_token_iter(self, filepath_or_buffer, limit=None):
         """
