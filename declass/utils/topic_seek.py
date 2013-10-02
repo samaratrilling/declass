@@ -140,6 +140,12 @@ class Topics(object):
         update_every ; int
         corpus_save_path : string
             Path to save corpus used for this fit to disc in svmlight format.
+
+        Notes
+        -----
+        If your are using a non-serialized corpus, then this may run slower.
+        You can serialize using self.serialize_current_corpus(save_path)
+        and then call self.set_corpus(save_path)
         """
         self.num_topics = num_topics
         t0 = time()
@@ -153,19 +159,19 @@ class Topics(object):
         self.lda = lda
 
         if corpus_save_path:
-            self.save_last_lda_corpus(corpus_save_path)
+            self.serialize_current_corpus(corpus_save_path)
 
         return lda
 
-    def save_last_lda_corpus(self, corpus_save_path):
+    def serialize_current_corpus(self, corpus_save_path):
         """
-        Save the corpus that was used during the last call to fit_lda
+        Save the corpus that was set by calling self.set_corpus()
         to svmlight format (with additional .index and .doc_id files).
         """
         if hasattr(self.corpus, 'fname'):
             if self.corpus.fname == corpus_save_path:
                 safepath = corpus_save_path + '.safety'
-                self.save_last_lda_corpus(safepath)
+                self.serialize_current_corpus(safepath)
                 raise ValueError(
                     "Corpus save path cannot equal corpus_load_path\n"
                     "File saved anyway to %s before exit" % safepath)
