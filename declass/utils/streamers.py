@@ -210,9 +210,10 @@ class TextFileStreamer(BaseStreamer):
 
             with open(onepath, 'r') as f:
                 text = f.read()
-                doc_id = filefilter.path_to_name(onepath)
-                record_dict = {'text': text, 'path': onepath, 
-                        'doc_id': doc_id}
+                doc_id = re.sub(self.name_strip, '', 
+                        filefilter.path_to_name(onepath, strip_ext=False))
+                record_dict = {'text': text, 'cached_paths': onepath, 
+                        'cached_doc_ids': doc_id}
                 if self.tokenizer:
                     record_dict['tokens'] = (
                             self.tokenizer.text_to_token_list(text))
