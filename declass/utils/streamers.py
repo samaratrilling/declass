@@ -48,7 +48,7 @@ class BaseStreamer(object):
             Call self.token_stream('doc_id', 'tokens') to cache
             info['doc_id'] and info['tokens'] (assuming both are available).
         """
-        return self.single_stream('tokens', paths=None, 
+        return self.single_stream('tokens', paths=paths, 
                 doc_ids=doc_ids, cache_list=cache_list)
 
 
