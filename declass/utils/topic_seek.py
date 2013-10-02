@@ -162,6 +162,13 @@ class Topics(object):
         Save the corpus that was used during the last call to fit_lda
         to svmlight format (with additional .index and .doc_id files).
         """
+        if hasattr(self.corpus, 'fname'):
+            if self.corpus.fname == corpus_save_path:
+                safepath = corpus_save_path + '.safety'
+                self.save_last_lda_corpus(safepath)
+                raise ValueError(
+                    "Corpus save path cannot equal corpus_load_path\n"
+                    "File saved anyway to %s before exit" % safepath)
         # compact format save of the corpus, index, and doc_id
         corpora.SvmLightCorpus.serialize(corpus_save_path, self.corpus)
         with open(corpus_save_path + '.doc_id', 'w') as f:

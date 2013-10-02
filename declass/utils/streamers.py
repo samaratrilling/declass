@@ -234,7 +234,8 @@ class TextFileStreamer(BaseStreamer):
                 if self.tokenizer:
                     record_dict['tokens'] = (
                             self.tokenizer.text_to_token_list(text))
-                yield record_dict
+
+            yield record_dict
 
         
 
