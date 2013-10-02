@@ -189,19 +189,20 @@ class TextFileStreamer(BaseStreamer):
         """
         return dict(zip(self.doc_ids, self.paths))
 
-    def info_stream(self, paths=None, doc_ids=None, limit=None):
+    def info_stream(self, paths=None, doc_ids=None, limit=None,
+            tokenizer=None):
         """
         Returns an iterator over paths returning token lists.
         """
         self.limit = limit
-        #import pdb; pdb.set_trace()
+        import pdb; pdb.set_trace()
 
         if doc_ids:
             doc_ids = [str(doc) for doc in doc_ids]
             doc_id_paths = pd.Series(self._doc_id_to_path)
             doc_id_paths = doc_id_paths.reindex(index=doc_ids)
             paths = doc_id_paths.values
-        elif paths==None:            
+        elif paths is None:            
             paths = self.paths
 
         for index, onepath in enumerate(paths):
@@ -211,8 +212,11 @@ class TextFileStreamer(BaseStreamer):
             with open(onepath, 'r') as f:
                 text = f.read()
                 doc_id = filefilter.path_to_name(onepath)
-                yield {'text': text, 'path': onepath, 
-                        'doc_id': doc_id}            
+                record_dict = {'text': text, 'path': onepath, 
+                        'doc_id': doc_id}
+                if tokenizer:
+                    record_dict['tokens'] = tokenizer.text_to_token_list(text)
+                yield record_dict
 
         
 
