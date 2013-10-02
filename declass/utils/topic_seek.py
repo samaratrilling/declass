@@ -187,21 +187,29 @@ class Topics(object):
 
         return lda
  
-    def write_topics(self, save_path, num_words=5):
+    def write_topics(self, filepath_or_buffer=None, num_words=5):
         """
         Writes the topics to disk.
         
         Parameters
         ----------
-        save_path : string
-            topics file path
+        filepath_or_buffer : string
+            topics file path.  If None, write to stdout.
         num_words : int
             number of words to write with each topic
         """
-        with open(save_path, 'w') as f:
-            for t in xrange(self.num_topics):
-                f.write('topic %s'%t + '\n')
-                f.write(self.lda.print_topic(t, topn=num_words) + '\n')
+        outfile = common.get_outfile(filepath_or_buffer)
+
+        for t in xrange(self.num_topics):
+            outfile.write('topic %s'%t + '\n')
+            f.write(self.lda.print_topic(t, topn=num_words) + '\n')
+
+        common.close_outfile(outfile)
+       # with open(save_path, 'w') as f:
+       #     outfile = common.get_outfile(path
+       #     for t in xrange(self.num_topics):
+       #         f.write('topic %s'%t + '\n')
+       #         f.write(self.lda.print_topic(t, topn=num_words) + '\n')
 
     def write_doc_topics(self, save_path, sep='|'):
         """
@@ -240,31 +248,3 @@ class Topics(object):
             plt.savefig(plot_path)
 
         return words_df
-
-
-class VWCorpus(object):
-    """
-    A simple corpus built with a dictionary and a VW token stream. 
-    """
-    def __init__(self, dictionary, vw_corpus_path, limit):
-        self.vw_corpus_path = vw_corpus_path
-        self.dictionary = dictionary
-        self.limit = limit
-    
-    def __iter__(self):
-        """
-        This method returns an iterator.
-        This method is automatically called when you use MyCorpus in a for 
-        loop. The returned value becomes the loop iterator.
-        """
-        token_streamer = text_processors.VWFormatter().sfile_to_token_iter(
-                self.vw_corpus_path, limit=self.limit)
-
-        for index, token_list in enumerate(token_streamer):
-            if index == self.limit:
-                raise StopIteration
-            yield self.dictionary.doc2bow(token_list)
-
-
-
-
