@@ -12,7 +12,8 @@ class BaseStreamer(object):
     """
     Base class...don't use this directly.
     """
-    def single_stream(self, item, limit=None, cache_list=[]):
+    def single_stream(self, item, paths=None, doc_ids=None, 
+            cache_list=[]):
         """
         Stream a single item from source.
 
@@ -20,8 +21,6 @@ class BaseStreamer(object):
         ----------
         item : String
             The single item to pull from info and stream.
-        limit : Integer
-            Limit returned results to this number
         cache_list : List of strings
             Cache these items on every iteration
         """
@@ -30,28 +29,27 @@ class BaseStreamer(object):
             self.__dict__[cache_item] = []
 
         # Iterate through self.info_stream and pull off required information.
-        stream = self.info_stream(limit=limit)
+        stream = self.info_stream(paths=paths, doc_ids=doc_ids)
         for i, info in enumerate(stream):
-            if i == limit:
+            if i == self.limit:
                 raise StopIteration
             for cache_item in cache_list:
                 self.__dict__[cache_item].append(info[cache_item])
 
             yield info[item]
 
-    def token_stream(self, limit=None, cache_list=[]):
+    def token_stream(self, paths=None, doc_ids=None, cache_list=[]):
         """
         Returns an iterator over tokens with possible caching of other info.
 
         Parameters
         ----------
-        limit : Integer
-            Limit returned results to this number
         cache_list : Cache these items as they appear
             Call self.token_stream('doc_id', 'tokens') to cache
             info['doc_id'] and info['tokens'] (assuming both are available).
         """
-        return self.single_stream('tokens', limit=limit, cache_list=cache_list)
+        return self.single_stream('tokens', paths=None, 
+                doc_ids=doc_ids, cache_list=cache_list)
 
 
 class VWStreamer(BaseStreamer):
@@ -59,7 +57,7 @@ class VWStreamer(BaseStreamer):
     For streaming from a single VW file.  Since the VW file format does not
     preserve token order, all tokens are unordered.
     """
-    def __init__(self, sfile=None, cache_sfile=False):
+    def __init__(self, sfile=None, cache_sfile=False, limit=None):
         """
         Parameters
         ----------
@@ -67,9 +65,13 @@ class VWStreamer(BaseStreamer):
             Points to a sparse (VW) formatted file.
         cache_sfile : Boolean
             If True, cache the sfile in memory.  CAREFUL!!!
+        limit : Integer
+            Only return this many results
+
         """
         self.sfile = sfile
         self.cache_sfile = cache_sfile
+        self.limit = limit
 
         self.formatter = text_processors.VWFormatter()
         
@@ -87,22 +89,22 @@ class VWStreamer(BaseStreamer):
 
         self.records = records
 
-    def _cached_stream(self, doc_ids=None, limit=None):
+    def _cached_stream(self, doc_ids=None):
         records = self.records
 
         if doc_ids is None:
             for i, (doc_id, record_dict) in enumerate(records.iteritems()):
-                if i == limit:
+                if i == self.limit:
                     raise StopIteration
                 yield record_dict
         else:
-            if (limit is not None) and self.cache_sfile:
+            if (self.limit is not None) and self.cache_sfile:
                 raise ValueError(
-                    "Cannot use both limit and doc_ids with cached stream")
+                    "Cannot use both self.limit and doc_ids with cached stream")
             for doc_id in doc_ids:
                 yield records[doc_id]
 
-    def _sfile_stream(self, doc_ids=None, limit=None):
+    def _sfile_stream(self, doc_ids=None):
         """
         Stream record_dict from an sfile that sits on disk.
         """
@@ -113,7 +115,7 @@ class VWStreamer(BaseStreamer):
             doc_ids = set(doc_ids)
 
         for i, line in enumerate(infile):
-            if i == limit:
+            if i == self.limit:
                 raise StopIteration
             
             record_dict = self.formatter.sstr_to_dict(line) 
@@ -125,7 +127,7 @@ class VWStreamer(BaseStreamer):
         if was_path:
             infile.close()
 
-    def info_stream(self, doc_ids=None, limit=None):
+    def info_stream(self, doc_ids=None):
         """
         Returns an iterator over info dicts.
 
@@ -133,10 +135,8 @@ class VWStreamer(BaseStreamer):
         ----------
         doc_ids : Iterable over Strings
             Return info dicts iff doc_id in doc_ids
-        limit : Integer
-            Only return this many results
         """
-        source = self.source(doc_ids=doc_ids, limit=limit)
+        source = self.source(doc_ids=doc_ids, limit=self.limit)
 
         # Read record_dict and convert to info by adding tokens
         for record_dict in source:
@@ -150,10 +150,12 @@ class TextFileStreamer(BaseStreamer):
     For streaming from text files.
     """
     def __init__(self, text_base_path=None, file_type='*.txt', 
-            name_strip=r'\..*'):
+            name_strip=r'\..*', tokenizer=None, limit=None):
         self.text_base_path = text_base_path
         self.file_type = file_type
         self.name_strip = name_strip
+        self.limit = None
+        self.tokenizer = tokenizer
     
     @lazyprop
     def paths(self):
@@ -189,13 +191,10 @@ class TextFileStreamer(BaseStreamer):
         """
         return dict(zip(self.doc_ids, self.paths))
 
-    def info_stream(self, paths=None, doc_ids=None, limit=None,
-            tokenizer=None):
+    def info_stream(self, paths=None, doc_ids=None):
         """
         Returns an iterator over paths returning token lists.
         """
-        self.limit = limit
-        import pdb; pdb.set_trace()
 
         if doc_ids:
             doc_ids = [str(doc) for doc in doc_ids]
@@ -206,7 +205,7 @@ class TextFileStreamer(BaseStreamer):
             paths = self.paths
 
         for index, onepath in enumerate(paths):
-            if index == limit:
+            if index == self.limit:
                 raise StopIteration
 
             with open(onepath, 'r') as f:
@@ -214,8 +213,9 @@ class TextFileStreamer(BaseStreamer):
                 doc_id = filefilter.path_to_name(onepath)
                 record_dict = {'text': text, 'path': onepath, 
                         'doc_id': doc_id}
-                if tokenizer:
-                    record_dict['tokens'] = tokenizer.text_to_token_list(text)
+                if self.tokenizer:
+                    record_dict['tokens'] = (
+                            self.tokenizer.text_to_token_list(text))
                 yield record_dict
 
         
