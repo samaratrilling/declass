@@ -126,7 +126,7 @@ class PathFinder(object):
         file_type : String
             Glob expression filtering the file type
         name_strip : String (Regex)
-            To convert filenames to doc_ids, we strip this pattern
+            To convert filenames to doc_id, we strip this pattern
             Default pattern r'\..*' strips everything after the first period
         limit : Integer
             Limit the paths returned to this number
@@ -150,16 +150,16 @@ class PathFinder(object):
         return paths
 
     @lazyprop
-    def doc_ids(self):
+    def doc_id(self):
         """
-        Get doc_ids corresponding to all paths.
+        Get doc_id corresponding to all paths.
         """
         regex = re.compile(self.name_strip)
-        doc_ids = [
+        doc_id = [
             regex.sub('', path_to_name(p, strip_ext=False))
             for p in self.paths]
 
-        return doc_ids
+        return doc_id
 
     @lazyprop
     def _doc_id_to_path(self):
@@ -167,7 +167,7 @@ class PathFinder(object):
         Build the dictionary mapping doc_id to path.  doc_id is based on
         the filename.
         """
-        return dict(zip(self.doc_ids, self.paths))
+        return dict(zip(self.doc_id, self.paths))
         
     def __getitem__(self, identifiers):
         """

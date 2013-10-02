@@ -22,10 +22,12 @@ class BaseStreamer(object):
             The single item to pull from info and stream.
         cache_list : List of strings
             Cache these items on every iteration
+        kwargs : Keyword args
+            Passed on to self.info_stream
         """
         # Initialize the cached items as attributes
         for cache_item in cache_list:
-            self.__dict__[cache_item] = []
+            self.__dict__[cache_item + '_cache'] = []
 
         # Iterate through self.info_stream and pull off required information.
         stream = self.info_stream(**kwargs)
@@ -33,7 +35,7 @@ class BaseStreamer(object):
             if i == self.limit:
                 raise StopIteration
             for cache_item in cache_list:
-                self.__dict__[cache_item].append(info[cache_item])
+                self.__dict__[cache_item + '_cache'].append(info[cache_item])
 
             yield info[item]
 
@@ -46,6 +48,8 @@ class BaseStreamer(object):
         cache_list : Cache these items as they appear
             Call self.token_stream('doc_id', 'tokens') to cache
             info['doc_id'] and info['tokens'] (assuming both are available).
+        kwargs : Keyword args
+            Passed on to self.info_stream
         """
         return self.single_stream('tokens', cache_list=cache_list, **kwargs)
 
@@ -87,54 +91,54 @@ class VWStreamer(BaseStreamer):
 
         self.records = records
 
-    def _cached_stream(self, doc_ids=None):
+    def _cached_stream(self, doc_id=None):
         records = self.records
 
-        if doc_ids is None:
-            for i, (doc_id, record_dict) in enumerate(records.iteritems()):
+        if doc_id is None:
+            for i, (doc, record_dict) in enumerate(records.iteritems()):
                 if i == self.limit:
                     raise StopIteration
                 yield record_dict
         else:
             if (self.limit is not None) and self.cache_sfile:
                 raise ValueError(
-                    "Cannot use both self.limit and doc_ids with cached stream")
-            for doc_id in doc_ids:
-                yield records[doc_id]
+                    "Cannot use both self.limit and doc_id with cached stream")
+            for doc in doc_id:
+                yield records[doc]
 
-    def _sfile_stream(self, doc_ids=None):
+    def _sfile_stream(self, doc_id=None):
         """
         Stream record_dict from an sfile that sits on disk.
         """
         # Open file if path.  If buffer or StringIO, passthrough.
         infile, was_path = common.openfile_wrap(self.sfile, 'rb')
 
-        if doc_ids is not None:
-            doc_ids = set(doc_ids)
+        if doc_id is not None:
+            doc_id = set(doc_id)
 
         for i, line in enumerate(infile):
             if i == self.limit:
                 raise StopIteration
             
             record_dict = self.formatter.sstr_to_dict(line) 
-            if doc_ids is not None:
-                if record_dict['doc_id'] not in doc_ids:
+            if doc_id is not None:
+                if record_dict['doc_id'] not in doc_id:
                     continue
             yield record_dict
 
         if was_path:
             infile.close()
 
-    def info_stream(self, doc_ids=None):
+    def info_stream(self, doc_id=None):
         """
         Returns an iterator over info dicts.
 
         Parameters
         ----------
-        doc_ids : Iterable over Strings
-            Return info dicts iff doc_id in doc_ids
+        doc_id : Iterable over Strings
+            Return info dicts iff doc_id in doc_id
         """
-        source = self.source(doc_ids=doc_ids)
+        source = self.source(doc_id=doc_id)
 
         # Read record_dict and convert to info by adding tokens
         for record_dict in source:
@@ -148,7 +152,8 @@ class TextFileStreamer(BaseStreamer):
     For streaming from text files.
     """
     def __init__(self, text_base_path=None, file_type='*.txt', 
-            name_strip=r'\..*', tokenizer=None, limit=None):
+            name_strip=r'\..*', tokenizer=text_processors.TokenizerBasic(),
+            limit=None):
         """
         Parameters
         ----------
@@ -183,16 +188,16 @@ class TextFileStreamer(BaseStreamer):
         return paths
 
     @lazyprop
-    def doc_ids(self):
+    def doc_id(self):
         """
-        Get doc_ids corresponding to all paths.
+        Get doc_id corresponding to all paths.
         """
         regex = re.compile(self.name_strip)
-        doc_ids = [
+        doc_id = [
             regex.sub('', filefilter.path_to_name(p, strip_ext=False))
             for p in self.paths]
 
-        return doc_ids
+        return doc_id
 
     @lazyprop
     def _doc_id_to_path(self):
@@ -200,22 +205,19 @@ class TextFileStreamer(BaseStreamer):
         Build the dictionary mapping doc_id to path.  doc_id is based on
         the filename.
         """
-        return dict(zip(self.doc_ids, self.paths))
+        return dict(zip(self.doc_id, self.paths))
 
-    def info_stream(self, paths=None, doc_ids=None):
+    def info_stream(self, paths=None, doc_id=None):
         """
         Returns an iterator over paths returning token lists.
         Parameters
         ----------
         paths : list of strings
-        doc_ids : list of strings or ints
+        doc_id : list of strings or ints
         """
 
-        if doc_ids:
-            doc_ids = [str(doc) for doc in doc_ids]
-            doc_id_paths = pd.Series(self._doc_id_to_path)
-            doc_id_paths = doc_id_paths.reindex(index=doc_ids)
-            paths = doc_id_paths.values
+        if doc_id:
+            paths = [self._doc_id_to_path[str(doc)] for doc in doc_id]
         elif paths is None:            
             paths = self.paths
 

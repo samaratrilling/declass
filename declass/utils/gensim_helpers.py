@@ -27,7 +27,7 @@ class SimpleCorpus(object):
         streamer_kwargs : Additional keyword args
             Passed to streamer.token_stream(), e.g.
                 limit (int), cache_list (list of strings), 
-                doc_ids (list of strings)
+                doc_id (list of strings)
         """
         self.streamer = streamer
         self.dictionary = dictionary

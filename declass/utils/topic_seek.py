@@ -41,6 +41,7 @@ class Topics(object):
         self.verbose = verbose
         self.limit = limit
         
+        assert (text_base_path is None) or (vw_corpus_path is None)
         if text_base_path:
             self.streamer = streamers.TextFileStreamer(
                     text_base_path=text_base_path, file_type=file_type,
@@ -48,16 +49,17 @@ class Topics(object):
         if vw_corpus_path:
             self.streamer = streamers.VWStreamer(
                     sfile=vw_corpus_path, limit=limit)
-    
 
     def set_dictionary(
-        self, tokenizer=None, load_path=None, no_below=5, no_above=0.5,
-        save_path=None):
+        self, doc_id=None, tokenizer=None, load_path=None, no_below=5,
+        no_above=0.5, save_path=None):
         """
         Convert token stream into a dictionary, setting self.dictionary.
         
         Parameters
         ----------
+        doc_id : List of doc_id
+            Only use documents with these ids to build the dictionary
         load_path : string
             path to saved dictionary 
         no_below : Integer
@@ -74,10 +76,8 @@ class Topics(object):
         if load_path:
             dictionary = corpora.Dictionary.load(load_path)
         else:
-            token_stream = self.streamer.token_stream(
-                    cache_list=['doc_id'])
+            token_stream = self.streamer.token_stream(doc_id=doc_id)
             dictionary = corpora.Dictionary(token_stream)
-            self.doc_ids = self.streamer.__dict__['doc_id']
         dictionary.filter_extremes(no_below=no_below, no_above=no_above)
         dictionary.compactify()
 
@@ -88,31 +88,43 @@ class Topics(object):
 
         self.dictionary = dictionary
 
-    def set_corpus(self, save_path=None):
+    def set_corpus(self, load_path=None, doc_id=None):
         """
-        Creates a corpus. 
-        
+        Creates a corpus and sets self.corpus, self.doc_id.  
+
         Parameters
         ----------
-        save_path : string
-            Path to save corpus to disc. 
+        load_path : String
+            If provided, load corpus from load_path.
+        doc_id : List of strings
+            Limit corpus building to documents with these ids
         """
         t0 = time()
-        self.corpus = gensim_helpers.SimpleCorpus(
-                    self.dictionary, self.streamer)
+
+        # If you're loading, set streamer.doc_id_cache now
+        # If you're streaming, self.streamer.doc_id_cache will be set when you
+        # actually stream.
+        if load_path:
+            assert doc_id is None, "Can't filter by doc_id with loaded corpus"
+            self.corpus = corpora.SvmLightCorpus(load_path)
+            self.streamer.__dict__['doc_id_cache'] = (
+                common.get_list_from_filerows(load_path + '.doc_id'))
+        else:
+            self.corpus = gensim_helpers.SimpleCorpus(
+                self.dictionary, self.streamer, doc_id=doc_id,
+                cache_list=['doc_id'])
+
         t1 = time()
         build_time = t1-t0
         self._print('corpus build time: %s'%build_time)
 
-        if save_path:
-            #compact format save
-            corpora.SvmLightCorpus.serialize(save_path, self.corpus)
-
-    def build_lda(
+    def fit_lda(
         self, num_topics, alpha=None, eta=None, passes=1, chunksize=2000,
-        update_every=1):
+        update_every=1, corpus_save_path=None):
         """
-        Buld the lda model.
+        Buld the lda model on the current version of self.corpus.
+        Sets self.doc_id equal to a list of doc_id encountered in building
+        this corpus.
         
         Parameters
         ----------
@@ -126,6 +138,8 @@ class Topics(object):
             number of passes for model build
         chunksize : int
         update_every ; int
+        corpus_save_path : string
+            Path to save corpus used for this fit to disc in svmlight format.
         """
         self.num_topics = num_topics
         t0 = time()
@@ -134,10 +148,24 @@ class Topics(object):
                 chunksize=chunksize, update_every=update_every)
         t1=time()
         build_time = t1-t0
-        self._print('lda build time: %s'%build_time)
+        self.doc_id = self.streamer.doc_id_cache
+        self._print('lda build time: %s' % build_time)
         self.lda = lda
 
+        if corpus_save_path:
+            self.save_last_lda_corpus(corpus_save_path)
+
         return lda
+
+    def save_last_lda_corpus(self, corpus_save_path):
+        """
+        Save the corpus that was used during the last call to fit_lda
+        to svmlight format (with additional .index and .doc_id files).
+        """
+        # compact format save of the corpus, index, and doc_id
+        corpora.SvmLightCorpus.serialize(corpus_save_path, self.corpus)
+        with open(corpus_save_path + '.doc_id', 'w') as f:
+            f.write('\n'.join(self.streamer.doc_id_cache))
  
     def write_topics(self, filepath_or_buffer=None, num_words=5):
         """
@@ -145,8 +173,8 @@ class Topics(object):
         
         Parameters
         ----------
-        filepath_or_buffer : string
-            topics file path.  If None, write to stdout.
+        filepath_or_buffer : string or open file
+            Designates file to write to.  If None, write to stdout.
         num_words : int
             number of words to write with each topic
         """
@@ -166,7 +194,7 @@ class Topics(object):
     def _get_topics_df(self):
         topics_df = pd.concat((pd.Series(dict(doc)) for doc in 
             self.lda[self.corpus]), axis=1).fillna(0).T
-        topics_df.index = self.doc_ids
+        topics_df.index = self.doc_id
         topics_df.index.name = 'doc_id'
         topics_df = topics_df.rename(
             columns={i: 'topic_' + str(i) for i in topics_df.columns})
