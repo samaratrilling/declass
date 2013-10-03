@@ -1,5 +1,6 @@
 Now
 ---
 
-* Put ability to filter by `doc_id` in `VWStreamer.info_stream`
-* Use pandas `SparseDataFrame`
+* Think about simplifying Topic
+* Add ability to access a subset of doc_id using a svmlight serialized corpus
+* Add ability to shuffle VW results
