@@ -17,7 +17,7 @@ class Topics(object):
     """
     def __init__(
         self, text_base_path=None, file_type='*.txt', vw_corpus_path=None,
-        tokenizer=text_processors.TokenizerBasic(), limit=None, 
+        shuffle=False, tokenizer=text_processors.TokenizerBasic(), limit=None, 
         verbose=False):
         """
         Parameters
@@ -28,6 +28,9 @@ class Topics(object):
             File types to filter by.
         vw_corpus_path : string None
             Path to corpus saved in sparse VW format. 
+        shuffle : Boolean
+            If True, shuffle paths in base_path
+            Not currently supported for vw_corpus_path
         tokenizer : function
         limit : int or None
             Limit for number of docs processed.
@@ -45,14 +48,14 @@ class Topics(object):
         if text_base_path:
             self.streamer = streamers.TextFileStreamer(
                     text_base_path=text_base_path, file_type=file_type,
-                    tokenizer=tokenizer,limit=limit)
+                    tokenizer=tokenizer, limit=limit, shuffle=shuffle)
         if vw_corpus_path:
             self.streamer = streamers.VWStreamer(
                     sfile=vw_corpus_path, limit=limit)
 
     def set_dictionary(
-        self, doc_id=None, tokenizer=None, load_path=None, no_below=5,
-        no_above=0.5, save_path=None):
+        self, doc_id=None, load_path=None, no_below=5, no_above=0.5,
+        save_path=None):
         """
         Convert token stream into a dictionary, setting self.dictionary.
         
@@ -110,7 +113,7 @@ class Topics(object):
             self.streamer.__dict__['doc_id_cache'] = (
                 common.get_list_from_filerows(load_path + '.doc_id'))
         else:
-            self.corpus = gensim_helpers.SimpleCorpus(
+            self.corpus = gensim_helpers.StreamerCorpus(
                 self.dictionary, self.streamer, doc_id=doc_id,
                 cache_list=['doc_id'])
 
@@ -180,18 +183,18 @@ class Topics(object):
         with open(corpus_save_path + '.doc_id', 'w') as f:
             f.write('\n'.join(self.streamer.doc_id_cache))
  
-    def write_topics(self, filepath_or_buffer=None, num_words=5):
+    def write_topics(self, path=None, num_words=5):
         """
         Writes the topics to disk.
         
         Parameters
         ----------
-        filepath_or_buffer : string or open file
+        path : string
             Designates file to write to.  If None, write to stdout.
         num_words : int
             number of words to write with each topic
         """
-        outfile = common.get_outfile(filepath_or_buffer)
+        outfile = common.get_outfile(path)
         for t in xrange(self.num_topics):
             outfile.write('topic %s'%t + '\n')
             outfile.write(self.lda.print_topic(t, topn=num_words) + '\n')

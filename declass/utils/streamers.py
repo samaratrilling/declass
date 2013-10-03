@@ -1,11 +1,12 @@
 """
 Classes for streaming tokens/info from files/sparse files etc...
 """
+from random import shuffle
+
+from gensim import corpora
+
 from . import filefilter, nlp, common, text_processors
 from common import lazyprop
-
-import pandas as pd
-import re 
 
 
 class BaseStreamer(object):
@@ -59,7 +60,8 @@ class VWStreamer(BaseStreamer):
     For streaming from a single VW file.  Since the VW file format does not
     preserve token order, all tokens are unordered.
     """
-    def __init__(self, sfile=None, cache_sfile=False, limit=None):
+    def __init__(
+        self, sfile=None, cache_sfile=False, limit=None, shuffle=False):
         """
         Parameters
         ----------
@@ -69,11 +71,13 @@ class VWStreamer(BaseStreamer):
             If True, cache the sfile in memory.  CAREFUL!!!
         limit : Integer
             Only return this many results
-
+        shuffle : Boolean
+            If True, shuffle paths once (and only once) before streaming
         """
         self.sfile = sfile
         self.cache_sfile = cache_sfile
         self.limit = limit
+        self.shuffle = shuffle
 
         self.formatter = text_processors.VWFormatter()
         
@@ -81,6 +85,7 @@ class VWStreamer(BaseStreamer):
             self.source = self._cached_stream
             self._init_cached_stream()
         else:
+            assert not shuffle, "Can only shuffle a cached stream"
             self.source = self._sfile_stream
 
     def _init_cached_stream(self):
@@ -89,13 +94,19 @@ class VWStreamer(BaseStreamer):
             doc_id = record_dict['doc_id']
             records[doc_id] = record_dict
 
+        # Set self.records and self.doc_id
         self.records = records
+        doc_id = records.keys()
+        if self.shuffle:
+            shuffle(doc_id)
+        self.doc_id = doc_id
 
     def _cached_stream(self, doc_id=None):
         records = self.records
 
         if doc_id is None:
-            for i, (doc, record_dict) in enumerate(records.iteritems()):
+            for i, doc in enumerate(self.doc_id):
+                record_dict = self.records[doc]
                 if i == self.limit:
                     raise StopIteration
                 yield record_dict
@@ -153,7 +164,7 @@ class TextFileStreamer(BaseStreamer):
     """
     def __init__(self, text_base_path=None, file_type='*.txt', 
             name_strip=r'\..*', tokenizer=text_processors.TokenizerBasic(),
-            limit=None):
+            limit=None, shuffle=False):
         """
         Parameters
         ----------
@@ -166,12 +177,15 @@ class TextFileStreamer(BaseStreamer):
         tokenizer : function
         limit : int or None
             Limit for number of docs processed.
+        shuffle : Boolean
+            If True, shuffle paths once (and only once) before streaming
         """
         self.text_base_path = text_base_path
         self.file_type = file_type
         self.name_strip = name_strip
         self.limit = limit
         self.tokenizer = tokenizer
+        self.shuffle = shuffle
     
     @lazyprop
     def paths(self):
@@ -182,6 +196,8 @@ class TextFileStreamer(BaseStreamer):
             paths = filefilter.get_paths(
                 self.text_base_path, file_type=self.file_type, 
                 limit=self.limit)
+            if self.shuffle:
+                shuffle(paths)
         else:
             paths = None
 
@@ -216,7 +232,7 @@ class TextFileStreamer(BaseStreamer):
         doc_id : list of strings or ints
         """
 
-        if doc_id:
+        if doc_id is not None:
             paths = [self._doc_id_to_path[str(doc)] for doc in doc_id]
         elif paths is None:            
             paths = self.paths
@@ -238,6 +254,3 @@ class TextFileStreamer(BaseStreamer):
             yield record_dict
 
         
-
-
-
