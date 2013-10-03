@@ -114,7 +114,7 @@ class Topics(object):
                 common.get_list_from_filerows(load_path + '.doc_id'))
         else:
             self.corpus = gensim_helpers.StreamerCorpus(
-                self.dictionary, self.streamer, doc_id=doc_id,
+                self.streamer, self.dictionary, doc_id=doc_id,
                 cache_list=['doc_id'])
 
         t1 = time()

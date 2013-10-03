@@ -2,6 +2,7 @@
 Classes for streaming tokens/info from files/sparse files etc...
 """
 from random import shuffle
+import re
 
 from gensim import corpora
 
@@ -194,10 +195,11 @@ class TextFileStreamer(BaseStreamer):
         """
         if self.text_base_path:
             paths = filefilter.get_paths(
-                self.text_base_path, file_type=self.file_type, 
-                limit=self.limit)
+                self.text_base_path, file_type=self.file_type)
             if self.shuffle:
                 shuffle(paths)
+            if self.limit:
+                paths = paths[: self.limit]
         else:
             paths = None
 
@@ -223,14 +225,18 @@ class TextFileStreamer(BaseStreamer):
         """
         return dict(zip(self.doc_id, self.paths))
 
-    def info_stream(self, paths=None, doc_id=None):
+    def info_stream(self, paths=None, doc_id=None, limit=None):
         """
         Returns an iterator over paths returning token lists.
         Parameters
         ----------
         paths : list of strings
         doc_id : list of strings or ints
+        limit : Integer
+            Use limit in place of self.limit.
         """
+        if limit is None:
+            limit = self.limit
 
         if doc_id is not None:
             paths = [self._doc_id_to_path[str(doc)] for doc in doc_id]
@@ -238,7 +244,7 @@ class TextFileStreamer(BaseStreamer):
             paths = self.paths
 
         for index, onepath in enumerate(paths):
-            if index == self.limit:
+            if index == limit:
                 raise StopIteration
 
             with open(onepath, 'r') as f:
