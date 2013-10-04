@@ -136,7 +136,7 @@ class DBCONNECT(object):
         sql = 'show tables'
         self.cursor.execute(sql)
         temp_output = self.cursor.fetchall()
-        output = [entry[0] for entry in temp_output]
+        output = [entry['Tables_in_declassification'] for entry in temp_output]
         return output
 
     def get_field_info(self, table_name):
@@ -150,8 +150,8 @@ class DBCONNECT(object):
         sql = 'show columns from %s'%table_name
         self.cursor.execute(sql)
         temp_output = self.cursor.fetchall()
-        output = [entry[:2] for entry in temp_output]
-        return output
+        #output = [entry[:2] for entry in temp_output]
+        return temp_output
 
     def close(self):
         """
@@ -168,11 +168,14 @@ class DBCONNECT(object):
 if __name__ == '__main__':
 
     dbCon = DBCONNECT(host_name='mysql.csail.mit.edu', db_name='declassification', user_name='declass', pwd='declass')
-    table_name = 'declassification'
-    doc_id = 242518
-    fields = 'body'
-    doc = dbCon.get_row_by_id(row_id=doc_id, table_name=table_name, fields=fields)
-    print doc
+    print dbCon.get_table_names()
+    #table_name = 'declassification'
+    table_name = 'DocumentPair'
+    print dbCon.get_field_info(table_name)
+    #doc_id = 242518
+    #fields = 'body'
+    #doc = dbCon.get_row_by_id(row_id=doc_id, table_name=table_name, fields=fields)
+    #print doc
     #doc_list = dbCon.get_rows_by_idlist(id_list=[242518, 317509], table_name=table_name, fields=fields)
     #print 'doc list ', doc_list
     #doc_list_iter = dbCon.get_rows_by_idlist(id_list=[242518, 317509], table_name=table_name, fields=fields, get_iter=True)
