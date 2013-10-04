@@ -2,10 +2,12 @@
 Classes for streaming tokens/info from files/sparse files etc...
 """
 from random import shuffle
+import re
 
 from gensim import corpora
 
 from . import filefilter, nlp, common, text_processors
+from text_processors import TokenizerBasic
 from common import lazyprop
 
 
@@ -162,9 +164,10 @@ class TextFileStreamer(BaseStreamer):
     """
     For streaming from text files.
     """
-    def __init__(self, text_base_path=None, file_type='*.txt', 
-            name_strip=r'\..*', tokenizer=text_processors.TokenizerBasic(),
-            limit=None, shuffle=False):
+    def __init__(
+        self, text_base_path=None, file_type='*.txt', name_strip=r'\..*', 
+        tokenizer_func=TokenizerBasic().text_to_token_list, limit=None,
+        shuffle=True):
         """
         Parameters
         ----------
@@ -174,7 +177,9 @@ class TextFileStreamer(BaseStreamer):
             File types to filter by.
         name_strip : raw string
             Regex to strip doc_id.
-        tokenizer : function
+        tokenizer_func : Function
+            If text_string is a string of text, tokenizer_func(text_string)
+            should return a list of strings (the "tokens").
         limit : int or None
             Limit for number of docs processed.
         shuffle : Boolean
@@ -184,7 +189,7 @@ class TextFileStreamer(BaseStreamer):
         self.file_type = file_type
         self.name_strip = name_strip
         self.limit = limit
-        self.tokenizer = tokenizer
+        self.tokenizer_func = tokenizer_func
         self.shuffle = shuffle
     
     @lazyprop
@@ -194,10 +199,11 @@ class TextFileStreamer(BaseStreamer):
         """
         if self.text_base_path:
             paths = filefilter.get_paths(
-                self.text_base_path, file_type=self.file_type, 
-                limit=self.limit)
+                self.text_base_path, file_type=self.file_type)
             if self.shuffle:
                 shuffle(paths)
+            if self.limit:
+                paths = paths[: self.limit]
         else:
             paths = None
 
@@ -223,14 +229,18 @@ class TextFileStreamer(BaseStreamer):
         """
         return dict(zip(self.doc_id, self.paths))
 
-    def info_stream(self, paths=None, doc_id=None):
+    def info_stream(self, paths=None, doc_id=None, limit=None):
         """
         Returns an iterator over paths returning token lists.
         Parameters
         ----------
         paths : list of strings
         doc_id : list of strings or ints
+        limit : Integer
+            Use limit in place of self.limit.
         """
+        if limit is None:
+            limit = self.limit
 
         if doc_id is not None:
             paths = [self._doc_id_to_path[str(doc)] for doc in doc_id]
@@ -238,7 +248,7 @@ class TextFileStreamer(BaseStreamer):
             paths = self.paths
 
         for index, onepath in enumerate(paths):
-            if index == self.limit:
+            if index == limit:
                 raise StopIteration
 
             with open(onepath, 'r') as f:
@@ -247,9 +257,8 @@ class TextFileStreamer(BaseStreamer):
                         filefilter.path_to_name(onepath, strip_ext=False))
                 record_dict = {'text': text, 'cached_path': onepath, 
                         'doc_id': doc_id}
-                if self.tokenizer:
-                    record_dict['tokens'] = (
-                            self.tokenizer.text_to_token_list(text))
+                if self.tokenizer_func:
+                    record_dict['tokens'] = self.tokenizer_func(text)
 
             yield record_dict
 
