@@ -113,8 +113,8 @@ class Topics(object):
             self.corpus = gensim_helpers.SvmLightPlusCorpus(
                 load_path, doc_id=doc_id)
         else:
-            self.corpus = gensim_helpers.StreamerCorpus.from_streamer_dict(
-                self.streamer, self.dictionary, save_path, doc_id=doc_id)
+            self.corpus = gensim_helpers.SvmLightPlusCorpus.from_streamer_dict(
+                self.streamer, self.dictionary, serialize_path, doc_id=doc_id)
 
         t1 = time()
         build_time = t1-t0
