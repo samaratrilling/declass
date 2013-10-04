@@ -9,6 +9,8 @@ from declass.utils import (
         text_processors, filefilter, streamers, gensim_helpers, common)
 from common import lazyprop
 
+from text_processors import TokenizerBasic
+
 
 class Topics(object):
     """
@@ -16,42 +18,33 @@ class Topics(object):
     See http://radimrehurek.com/gensim/ for more details.
     """
     def __init__(
-        self, text_base_path=None, file_type='*.txt', vw_corpus_path=None,
-        shuffle=False, tokenizer=text_processors.TokenizerBasic(), limit=None, 
+        self, text_base_path=None, limit=None, file_type='*.txt',
+        shuffle=True, tokenizer_func=TokenizerBasic().text_to_token_list,
         verbose=False):
         """
         Parameters
         ----------
         text_base_path : string or None
-            Base path to dir containing files.
+            Base path to dir containing files.  Used as the default source
+            for dictionaries and corpus if these are not specified.
+        limit : int or None
+            Limit files read in text_base_path to this many.
         file_type : string
             File types to filter by.
-        vw_corpus_path : string None
-            Path to corpus saved in sparse VW format. 
         shuffle : Boolean
             If True, shuffle paths in base_path
-            Not currently supported for vw_corpus_path
-        tokenizer : function
-        limit : int or None
-            Limit for number of docs processed.
+        tokenizer_func : function
+            Converts text strings to lists of words.  Used to create dictionary
+            and corpus.
         verbose : bool
-        
-        Notes
-        -----
-        If text_base_path is None assumes that sparse_corpus_path will be 
-        specified. Current supports on VW sparse format.
         """
         self.verbose = verbose
-        self.limit = limit
         
-        assert (text_base_path is None) or (vw_corpus_path is None)
         if text_base_path:
             self.streamer = streamers.TextFileStreamer(
                     text_base_path=text_base_path, file_type=file_type,
-                    tokenizer=tokenizer, limit=limit, shuffle=shuffle)
-        if vw_corpus_path:
-            self.streamer = streamers.VWStreamer(
-                    sfile=vw_corpus_path, limit=limit)
+                    tokenizer_func=tokenizer_func, limit=limit,
+                    shuffle=shuffle)
 
     def set_dictionary(
         self, doc_id=None, load_path=None, no_below=5, no_above=0.5,
@@ -91,31 +84,37 @@ class Topics(object):
 
         self.dictionary = dictionary
 
-    def set_corpus(self, load_path=None, doc_id=None):
+    def set_corpus(self, load_path=None, serialize_path=None, doc_id=None):
         """
-        Creates a corpus and sets self.corpus, self.doc_id.  
+        Creates a corpus and sets self.corpus
 
         Parameters
         ----------
         load_path : String
-            If provided, load corpus from load_path.
+            Load an SvmLightPlusCorpus from here.
+        serialize_path : String
+            Create an SvmLightPlusCorpus using self.streamer and
+            self.dictionary, then save it here.
         doc_id : List of strings
             Limit corpus building to documents with these ids
         """
         t0 = time()
+        # Enforce one and only one of load_path, serialize_path
+        load_nosave = (load_path is not None) and (serialize_path is None)
+        noload_save = (load_path is None) and (serialize_path is not None)
+        assert load_nosave or noload_save, (
+            "Provide one and only one of load_path, serialize_path")
 
         # If you're loading, set streamer.doc_id_cache now
         # If you're streaming, self.streamer.doc_id_cache will be set when you
         # actually stream.
         if load_path:
             assert doc_id is None, "Can't filter by doc_id with loaded corpus"
-            self.corpus = corpora.SvmLightCorpus(load_path)
-            self.streamer.__dict__['doc_id_cache'] = (
-                common.get_list_from_filerows(load_path + '.doc_id'))
+            self.corpus = gensim_helpers.SvmLightPlusCorpus(
+                load_path, doc_id=doc_id)
         else:
-            self.corpus = gensim_helpers.StreamerCorpus(
-                self.streamer, self.dictionary, doc_id=doc_id,
-                cache_list=['doc_id'])
+            self.corpus = gensim_helpers.StreamerCorpus.from_streamer_dict(
+                self.streamer, self.dictionary, save_path, doc_id=doc_id)
 
         t1 = time()
         build_time = t1-t0
@@ -126,8 +125,6 @@ class Topics(object):
         update_every=1, corpus_save_path=None):
         """
         Buld the lda model on the current version of self.corpus.
-        Sets self.doc_id equal to a list of doc_id encountered in building
-        this corpus.
         
         Parameters
         ----------
@@ -157,7 +154,6 @@ class Topics(object):
                 chunksize=chunksize, update_every=update_every)
         t1=time()
         build_time = t1-t0
-        self.doc_id = self.streamer.doc_id_cache
         self._print('lda build time: %s' % build_time)
         self.lda = lda
 
@@ -166,23 +162,6 @@ class Topics(object):
 
         return lda
 
-    def serialize_current_corpus(self, corpus_save_path):
-        """
-        Save the corpus that was set by calling self.set_corpus()
-        to svmlight format (with additional .index and .doc_id files).
-        """
-        if hasattr(self.corpus, 'fname'):
-            if self.corpus.fname == corpus_save_path:
-                safepath = corpus_save_path + '.safety'
-                self.serialize_current_corpus(safepath)
-                raise ValueError(
-                    "Corpus save path cannot equal corpus_load_path\n"
-                    "File saved anyway to %s before exit" % safepath)
-        # compact format save of the corpus, index, and doc_id
-        corpora.SvmLightCorpus.serialize(corpus_save_path, self.corpus)
-        with open(corpus_save_path + '.doc_id', 'w') as f:
-            f.write('\n'.join(self.streamer.doc_id_cache))
- 
     def write_topics(self, path=None, num_words=5):
         """
         Writes the topics to disk.
@@ -210,7 +189,7 @@ class Topics(object):
     def _get_topics_df(self):
         topics_df = pd.concat((pd.Series(dict(doc)) for doc in 
             self.lda[self.corpus]), axis=1).fillna(0).T
-        topics_df.index = self.doc_id
+        topics_df.index = self.corpus.doc_id
         topics_df.index.name = 'doc_id'
         topics_df = topics_df.rename(
             columns={i: 'topic_' + str(i) for i in topics_df.columns})
@@ -234,6 +213,8 @@ class Topics(object):
         if plot_path:
             plt.figure()
             words_df.docfreq.apply(np.log10).hist(bins=200)
+            plt.xlabel('log10(docfreq)')
+            plt.ylabel('Count')
             plt.savefig(plot_path)
 
         return words_df
