@@ -7,6 +7,7 @@ import re
 from gensim import corpora
 
 from . import filefilter, nlp, common, text_processors
+from text_processors import TokenizerBasic
 from common import lazyprop
 
 
@@ -163,9 +164,10 @@ class TextFileStreamer(BaseStreamer):
     """
     For streaming from text files.
     """
-    def __init__(self, text_base_path=None, file_type='*.txt', 
-            name_strip=r'\..*', tokenizer=text_processors.TokenizerBasic(),
-            limit=None, shuffle=False):
+    def __init__(
+        self, text_base_path=None, file_type='*.txt', name_strip=r'\..*', 
+        tokenizer_func=TokenizerBasic().text_to_token_list, limit=None,
+        shuffle=True):
         """
         Parameters
         ----------
@@ -175,7 +177,9 @@ class TextFileStreamer(BaseStreamer):
             File types to filter by.
         name_strip : raw string
             Regex to strip doc_id.
-        tokenizer : function
+        tokenizer_func : Function
+            If text_string is a string of text, tokenizer_func(text_string)
+            should return a list of strings (the "tokens").
         limit : int or None
             Limit for number of docs processed.
         shuffle : Boolean
@@ -185,7 +189,7 @@ class TextFileStreamer(BaseStreamer):
         self.file_type = file_type
         self.name_strip = name_strip
         self.limit = limit
-        self.tokenizer = tokenizer
+        self.tokenizer_func = tokenizer_func
         self.shuffle = shuffle
     
     @lazyprop
@@ -253,9 +257,8 @@ class TextFileStreamer(BaseStreamer):
                         filefilter.path_to_name(onepath, strip_ext=False))
                 record_dict = {'text': text, 'cached_path': onepath, 
                         'doc_id': doc_id}
-                if self.tokenizer:
-                    record_dict['tokens'] = (
-                            self.tokenizer.text_to_token_list(text))
+                if self.tokenizer_func:
+                    record_dict['tokens'] = self.tokenizer_func(text)
 
             yield record_dict
 

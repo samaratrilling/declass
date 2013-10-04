@@ -66,33 +66,52 @@ class SvmLightPlusCorpus(corpora.SvmLightCorpus):
     Extends gensim.corpora.SvmLightCorpus, providing methods to work with
     (e.g. filter by) doc_ids.
     """
-    def __init__(self, fname, doc_id=None, limit=None):
+    def __init__(self, fname, doc_id=None, doc_id_filter=None, limit=None):
         """
         Parameters
         ----------
         fname : Path
             Contains the .svmlight bag-of-words text file
-        doc_id : Iterable over strings
-            Limit all streaming results to docs with these doc_ids
+        doc_id : Iterable
+            Stream these doc_ids exactly, in the order given.
+        doc_id_filter : Iterable
+            Stream doc_ids in intersection of fname.doc_id and doc_id_filter
         limit : Integer
-            Limit all streaming results to this many
+            Equivalent to initializing with the first limit rows of fname and
+            fname.doc_id.
         """
-        super(SvmLightPlusCorpus, self).__init__(fname)
+        corpora.SvmLightCorpus.__init__(self, fname)
 
         self.limit = limit
         
         # All possible doc_id in the corpus
-        self.doc_id_all = common.get_list_from_filerows(
-            fname + '.doc_id')
+        self.doc_id_all = common.get_list_from_filerows(fname + '.doc_id')
+        self.doc_id_all = self.doc_id_all[: limit]
+        self.doc_id_all_set = set(self.doc_id_all)
 
-        # Limit all streaming results to docs in self.doc_id
-        if doc_id is not None:
-            self.doc_id_set = set(doc_id)
+        # Set self.doc_id
+        if doc_id_filter is not None:
+            assert doc_id is None, "Can't pass both doc_id and doc_id_filter"
+            self.doc_id = [
+                id for id in doc_id_filter if str(id) in self.doc_id_all_set]
+        elif doc_id is not None:
+            self.doc_id = doc_id
         else:
-            self.doc_id_set = set(self.doc_id_all)
+            self.doc_id = self.doc_id_all
 
-        self.doc_id = [
-            doc for doc in self.doc_id_all if doc in self.doc_id_set]
+    @property
+    def doc_id(self):
+        return self._doc_id
+    
+    @doc_id.setter
+    def doc_id(self, iterable):
+        # Called whenever you set self.doc_id = something
+        self._doc_id = [str(id) for id in iterable]
+        self.doc_id_set = set(self._doc_id)
+        if not self.doc_id_set.issubset(self.doc_id_all_set):
+            raise ValueError(
+                "Attempt to set self.doc_id to values not contained in the"
+                " corpus .doc_id file")
 
     def __iter__(self):
         """
@@ -103,12 +122,12 @@ class SvmLightPlusCorpus(corpora.SvmLightCorpus):
         doc_id : Iterable over Strings
             Return info dicts iff doc_id in doc_id
         """
-        base_iterable = super(SvmLightPlusCorpus, self).__iter__()
+        base_iterable = corpora.SvmLightCorpus.__iter__(self)
         for i, row in enumerate(base_iterable):
             if i == self.limit:
                 raise StopIteration
 
-            if self.doc_id_all[i] in self.doc_id:
+            if self.doc_id_all[i] in self.doc_id_set:
                 yield row
 
     def serialize(self, fname, **kwargs):
@@ -161,11 +180,11 @@ class SvmLightPlusCorpus(corpora.SvmLightCorpus):
         return SvmLightPlusCorpus(fname, doc_id=doc_id, limit=limit)
 
 
-def get_words_docfreq(self):
+def get_words_docfreq(dictionary):
     """
     Returns a df with token id, doc freq as columns and words as index.
     """
-    id2token = dict(self.dictionary.items())
+    id2token = dict(dictionary.items())
     words_df = pd.DataFrame(
             {id2token[tokenid]: [tokenid, docfreq] 
              for tokenid, docfreq in dictionary.dfs.iteritems()},
@@ -175,7 +194,7 @@ def get_words_docfreq(self):
     return words_df
 
 
-def get_doc_topics(corpus, lda, doc_id=None):
+def get_topics_df(corpus, lda):
     """
     Creates a delimited file with doc_id and topics scores.
     """
@@ -184,8 +203,8 @@ def get_doc_topics(corpus, lda, doc_id=None):
     topics_df = topics_df.rename(
         columns={i: 'topic_' + str(i) for i in topics_df.columns})
 
-    if doc_id is not None:
-        topics_df.index = self.doc_id
+    if hasattr(corpus, 'doc_id'):
+        topics_df.index = corpus.doc_id
         topics_df.index.name = 'doc_id'
 
     return topics_df
