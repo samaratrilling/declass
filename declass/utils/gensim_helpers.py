@@ -18,7 +18,7 @@ class StreamerCorpus(object):
     or
     gensim.corpora.SvmLightCorpus.serialize(path, self) 
     """
-    def __init__(self, streamer, dictionary, **streamer_kwargs):
+    def __init__(self, streamer, dictionary, doc_id=None, limit=None):
         """
         Stream token lists from pre-defined path lists.
 
@@ -27,20 +27,24 @@ class StreamerCorpus(object):
         streamer : Streamer compatible object.
             Method streamer.token_stream() returns a stream of lists of words.
         dictionary : gensim.corpora.Dictionary object
-        streamer_kwargs : Additional keyword args
-            Passed to streamer.token_stream(), e.g.
-                limit (int), cache_list (list of strings), 
-                doc_id (list of strings)
+        doc_id : Iterable over strings
+            Limit all streaming results to docs with these doc_ids
+        limit : Integer
+            Limit all streaming results to this many
         """
         self.streamer = streamer
         self.dictionary = dictionary
-        self.streamer_kwargs = streamer_kwargs
+        self.doc_id = doc_id
+        self.limit = limit
 
     def __iter__(self):
         """
         Returns an iterator of "corpus type" over text files.
         """
-        for token_list in self.streamer.token_stream(**self.streamer_kwargs):
+        token_stream = self.streamer.token_stream(
+            doc_id=self.doc_id, limit=self.limit, cache_list=['doc_id'])
+
+        for token_list in token_stream:
             yield self.dictionary.doc2bow(token_list)
 
     def serialize(self, fname):
@@ -48,17 +52,13 @@ class StreamerCorpus(object):
         Save to svmlight (plus) format, generating files:
         fname, fname.index, fname.doc_id
         """
-        # See if you are limiting doc_id to some list
-        doc_id = self.streamer_kwargs.get('doc_id', None)
-        if doc_id is None:
-            doc_id = self.streamer.doc_id
-
         # Make the corpus and .index file
         corpora.SvmLightCorpus.serialize(fname, self)
 
         # Make the .doc_id file
+        # Streamer cached the doc_id while streaming
         with open(fname + '.doc_id', 'w') as f:
-            f.write('\n'.join(doc_id))
+            f.write('\n'.join(self.streamer.doc_id_cache))
 
 
 class SvmLightPlusCorpus(corpora.SvmLightCorpus):
