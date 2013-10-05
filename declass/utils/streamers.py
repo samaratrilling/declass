@@ -10,6 +10,12 @@ from . import filefilter, nlp, common, text_processors
 from text_processors import TokenizerBasic
 from common import lazyprop
 
+try:
+    from parallel_easy import imap_easy
+    HAS_PARALLEL_EASY = True
+except ImportError:
+    HAS_PARALLEL_EASY = False
+
 
 class BaseStreamer(object):
     """
@@ -229,7 +235,7 @@ class TextFileStreamer(BaseStreamer):
         """
         return dict(zip(self.doc_id, self.paths))
 
-    def info_stream(self, paths=None, doc_id=None, limit=None):
+    def info_stream(self, paths=None, doc_id=None, limit=None, n_jobs=1):
         """
         Returns an iterator over paths returning token lists.
         Parameters
@@ -238,6 +244,7 @@ class TextFileStreamer(BaseStreamer):
         doc_id : list of strings or ints
         limit : Integer
             Use limit in place of self.limit.
+        n_jobs : 
         """
         if limit is None:
             limit = self.limit
@@ -247,19 +254,28 @@ class TextFileStreamer(BaseStreamer):
         elif paths is None:            
             paths = self.paths
 
+        if (limit is None) and HAS_PARALLEL_EASY:
+            return parallel_stream(paths, n_jobs)
+        else:
+
+
         for index, onepath in enumerate(paths):
             if index == limit:
                 raise StopIteration
 
-            with open(onepath, 'r') as f:
-                text = f.read()
-                doc_id = re.sub(self.name_strip, '', 
-                        filefilter.path_to_name(onepath, strip_ext=False))
-                record_dict = {'text': text, 'cached_path': onepath, 
-                        'doc_id': doc_id}
-                if self.tokenizer_func:
-                    record_dict['tokens'] = self.tokenizer_func(text)
+            record_dict = self._onepath_to_record_dict(onepath)
 
             yield record_dict
 
-        
+    def _onepath_to_record_dict(self, onepath):
+        with open(onepath, 'r') as f:
+            text = f.read()
+            doc_id = re.sub(self.name_strip, '', 
+                    filefilter.path_to_name(onepath, strip_ext=False))
+            record_dict = {'text': text, 'cached_path': onepath, 
+                    'doc_id': doc_id}
+            if self.tokenizer_func:
+                record_dict['tokens'] = self.tokenizer_func(text)
+
+        return record_dict
+    
