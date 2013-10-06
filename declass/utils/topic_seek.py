@@ -10,7 +10,7 @@ from declass.utils import (
         text_processors, filefilter, streamers, gensim_helpers, common)
 from common import lazyprop
 
-from text_processors import TokenizerBasic
+from text_processors import TokenizerBasic, tokenizer_func_basic
 
 
 class Topics(object):
@@ -20,7 +20,7 @@ class Topics(object):
     """
     def __init__(
         self, text_base_path=None, limit=None, file_type='*.txt',
-        shuffle=True, tokenizer_func=TokenizerBasic().text_to_token_list,
+        shuffle=True, tokenizer_func=tokenizer_func_basic,
         verbose=False):
         """
         Parameters
@@ -44,12 +44,11 @@ class Topics(object):
         if text_base_path:
             self.streamer = streamers.TextFileStreamer(
                     text_base_path=text_base_path, file_type=file_type,
-                    tokenizer_func=tokenizer_func, limit=limit,
-                    shuffle=shuffle)
+                    limit=limit, shuffle=shuffle)
 
     def set_dictionary(
         self, doc_id=None, load_path=None, no_below=5, no_above=0.5,
-        save_path=None):
+        save_path=None, n_jobs=1):
         """
         Convert token stream into a dictionary, setting self.dictionary.
         
@@ -73,7 +72,9 @@ class Topics(object):
         if load_path:
             dictionary = corpora.Dictionary.load(load_path)
         else:
-            token_stream = self.streamer.token_stream(doc_id=doc_id)
+            token_stream = self.streamer.token_stream(
+                doc_id=doc_id, n_jobs=n_jobs,
+                tokenizer_func=tokenizer_func_basic)
             dictionary = corpora.Dictionary(token_stream)
         dictionary.filter_extremes(no_below=no_below, no_above=no_above)
         dictionary.compactify()

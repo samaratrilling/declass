@@ -73,6 +73,24 @@ class TokenizerBasic(BaseTokenizer):
 
         return [word.lower() for word in tokens if not nlp.is_stopword(word)]
 
+def tokenizer_func_basic(text):
+    """
+    Return a list of tokens.  
+    Filter/transform words according to the scheme this Tokenizer uses.
+
+    Parameters
+    ----------
+    text : String
+
+    Returns
+    -------
+    tokens : List
+        Tokenized text, e.g. ['hello', 'my', 'name', 'is', 'ian']
+    """
+    tokens = nlp.word_tokenize(text, L=2, numeric=False)
+
+    return [word.lower() for word in tokens if not nlp.is_stopword(word)]
+
 
 class TokenizerPOSFilter(BaseTokenizer):
     """

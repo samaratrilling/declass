@@ -3,12 +3,14 @@ Classes for streaming tokens/info from files/sparse files etc...
 """
 from random import shuffle
 import re
+from functools import partial
 
 from gensim import corpora
 
 from . import filefilter, nlp, common, text_processors
-from text_processors import TokenizerBasic
-from common import lazyprop
+from text_processors import TokenizerBasic, tokenizer_func_basic
+from common import lazyprop, pickleme
+from parallel_easy.base import imap_easy
 
 
 class BaseStreamer(object):
@@ -166,8 +168,7 @@ class TextFileStreamer(BaseStreamer):
     """
     def __init__(
         self, text_base_path=None, file_type='*.txt', name_strip=r'\..*', 
-        tokenizer_func=TokenizerBasic().text_to_token_list, limit=None,
-        shuffle=True):
+        limit=None, shuffle=True):
         """
         Parameters
         ----------
@@ -177,9 +178,6 @@ class TextFileStreamer(BaseStreamer):
             File types to filter by.
         name_strip : raw string
             Regex to strip doc_id.
-        tokenizer_func : Function
-            If text_string is a string of text, tokenizer_func(text_string)
-            should return a list of strings (the "tokens").
         limit : int or None
             Limit for number of docs processed.
         shuffle : Boolean
@@ -189,7 +187,6 @@ class TextFileStreamer(BaseStreamer):
         self.file_type = file_type
         self.name_strip = name_strip
         self.limit = limit
-        self.tokenizer_func = tokenizer_func
         self.shuffle = shuffle
     
     @lazyprop
@@ -229,7 +226,9 @@ class TextFileStreamer(BaseStreamer):
         """
         return dict(zip(self.doc_id, self.paths))
 
-    def info_stream(self, paths=None, doc_id=None, limit=None, n_jobs=1):
+    def info_stream(
+        self, paths=None, doc_id=None, limit=None, tokenizer_func=None,
+        n_jobs=1):
         """
         Returns an iterator over paths returning token lists.
         Parameters
@@ -238,6 +237,9 @@ class TextFileStreamer(BaseStreamer):
         doc_id : list of strings or ints
         limit : Integer
             Use limit in place of self.limit.
+        tokenizer_func : Function
+            If text_string is a string of text, tokenizer_func(text_string)
+            should return a list of strings (the "tokens").
         n_jobs : Integer
             Number of jobs to use.  -1 for all possible cores.
         """
@@ -251,29 +253,29 @@ class TextFileStreamer(BaseStreamer):
         elif paths is None:            
             paths = self.paths
 
-        return self._parallel_stream(paths, limit, n_jobs)
-
-    def _parallel_stream(self, paths, limit, n_jobs):
         if limit is not None:
             assert n_jobs == 1, "Cannot place a limit with more than 1 job"
 
-        for index, onepath in enumerate(paths):
-            if index == limit:
-                raise StopIteration
+        func = partial(
+            _onepath_to_record_dict, self.name_strip, tokenizer_func)
+        results_iterator = imap_easy(func, paths, n_jobs, 500)
 
-            record_dict = self._onepath_to_record_dict(onepath)
-
+        for index, record_dict in enumerate(results_iterator):
             yield record_dict
-
-    def _onepath_to_record_dict(self, onepath):
-        with open(onepath, 'r') as f:
-            text = f.read()
-            doc_id = re.sub(self.name_strip, '', 
-                    filefilter.path_to_name(onepath, strip_ext=False))
-            record_dict = {'text': text, 'cached_path': onepath, 
-                    'doc_id': doc_id}
-            if self.tokenizer_func:
-                record_dict['tokens'] = self.tokenizer_func(text)
-
-        return record_dict
     
+def _onepath_to_record_dict(name_strip, tokenizer_func, onepath):
+    """
+    Called by TextFileStreamer.info_stream.  This is separate to avoid making
+    it an (unpicklable) instancemethod.
+    """
+    with open(onepath, 'r') as f:
+        text = f.read()
+        doc_id = re.sub(name_strip, '', 
+                filefilter.path_to_name(onepath, strip_ext=False))
+        record_dict = {'text': text, 'cached_path': onepath, 
+                'doc_id': doc_id}
+        if tokenizer_func:
+            record_dict['tokens'] = tokenizer_func(text)
+
+    return record_dict
+
