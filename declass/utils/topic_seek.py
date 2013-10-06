@@ -1,6 +1,7 @@
 import sys
 import pandas as pd
 import numpy as np
+from numpy.testing import assert_allclose
 import matplotlib.pylab as plt
 
 from time import time
@@ -77,7 +78,9 @@ class Topics(object):
         dictionary.filter_extremes(no_below=no_below, no_above=no_above)
         dictionary.compactify()
 
-        self._print('dictionary build time: %.2f' % (time() - t0))
+        if not load_path:
+            build_time = (time() - t0) / 3600.
+            self._print('Dictionary built in %.2f hours' % build_time)
 
         if save_path:
             dictionary.save(save_path)
@@ -115,14 +118,12 @@ class Topics(object):
         else:
             self.corpus = gensim_helpers.SvmLightPlusCorpus.from_streamer_dict(
                 self.streamer, self.dictionary, serialize_path, doc_id=doc_id)
-
-        t1 = time()
-        build_time = t1-t0
-        self._print('corpus build time: %s'%build_time)
+            build_time = (time() - t0) / 3600.
+            self._print('Corpus built %.2f hours' % build_time)
 
     def fit_lda(
         self, num_topics, alpha=None, eta=None, passes=1, chunksize=2000,
-        update_every=1, corpus_save_path=None):
+        update_every=1):
         """
         Buld the lda model on the current version of self.corpus.
         
@@ -138,27 +139,17 @@ class Topics(object):
             number of passes for model build
         chunksize : int
         update_every ; int
-        corpus_save_path : string
-            Path to save corpus used for this fit to disc in svmlight format.
-
-        Notes
-        -----
-        If your are using a non-serialized corpus, then this may run slower.
-        You can serialize using self.serialize_current_corpus(save_path)
-        and then call self.set_corpus(save_path)
         """
         self.num_topics = num_topics
         t0 = time()
+
         lda = models.LdaModel(self.corpus, id2word=self.dictionary, 
                 num_topics=num_topics, passes=passes, alpha=alpha, eta=eta, 
                 chunksize=chunksize, update_every=update_every)
-        t1=time()
-        build_time = t1-t0
-        self._print('lda build time: %s' % build_time)
-        self.lda = lda
 
-        if corpus_save_path:
-            self.serialize_current_corpus(corpus_save_path)
+        build_time = (time() - t0) / 3600.
+        self._print('LDA built in %.2f hours' % build_time)
+        self.lda = lda
 
         return lda
 
@@ -184,7 +175,16 @@ class Topics(object):
         Creates a delimited file with doc_id and topics scores.
         """
         topics_df = self._get_topics_df()
+        # Make sure the topic values sum to within atol of 1.0
+        self._qa_topics(topics_df)
         topics_df.to_csv(save_path, sep=sep, header=True)
+
+    def _qa_topics(self, topics_df):
+        topic_sums = topics_df.sum(axis=1).values
+        passed = np.fabs((topic_sums - 1)).max() < 0.1
+        msg = '=' * 79 + '\n'
+        msg += "Topics QA test passed:  %s\n" % passed
+        print(msg)
     
     def _get_topics_df(self):
         topics_df = pd.concat((pd.Series(dict(doc)) for doc in 
