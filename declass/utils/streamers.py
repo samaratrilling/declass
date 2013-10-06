@@ -251,9 +251,12 @@ class TextFileStreamer(BaseStreamer):
         elif paths is None:            
             paths = self.paths
 
-        return self._parallel_stream(paths, n_jobs)
+        return self._parallel_stream(paths, limit, n_jobs)
 
-    def _parallel_stream(self, paths, n_jobs):
+    def _parallel_stream(self, paths, limit, n_jobs):
+        if limit is not None:
+            assert n_jobs == 1, "Cannot place a limit with more than 1 job"
+
         for index, onepath in enumerate(paths):
             if index == limit:
                 raise StopIteration
