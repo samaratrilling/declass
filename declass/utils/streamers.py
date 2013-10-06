@@ -10,12 +10,6 @@ from . import filefilter, nlp, common, text_processors
 from text_processors import TokenizerBasic
 from common import lazyprop
 
-try:
-    from parallel_easy import imap_easy
-    HAS_PARALLEL_EASY = True
-except ImportError:
-    HAS_PARALLEL_EASY = False
-
 
 class BaseStreamer(object):
     """
@@ -244,21 +238,22 @@ class TextFileStreamer(BaseStreamer):
         doc_id : list of strings or ints
         limit : Integer
             Use limit in place of self.limit.
-        n_jobs : 
+        n_jobs : Integer
+            Number of jobs to use.  -1 for all possible cores.
         """
         if limit is None:
             limit = self.limit
+        else:
+            assert n_jobs == 1, "Cannot use more than one "
 
         if doc_id is not None:
             paths = [self._doc_id_to_path[str(doc)] for doc in doc_id]
         elif paths is None:            
             paths = self.paths
 
-        if (limit is None) and HAS_PARALLEL_EASY:
-            return parallel_stream(paths, n_jobs)
-        else:
+        return self._parallel_stream(paths, n_jobs)
 
-
+    def _parallel_stream(self, paths, n_jobs):
         for index, onepath in enumerate(paths):
             if index == limit:
                 raise StopIteration
