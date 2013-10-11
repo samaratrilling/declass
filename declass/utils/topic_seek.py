@@ -176,8 +176,15 @@ class Topics(object):
         """
         topics_df = self._get_topics_df()
         # Make sure the topic values sum to within atol of 1.0
-        assert_allclose(df.sum(axis=1).values, 1, atol=0.1)
+        self._qa_topics(topics_df)
         topics_df.to_csv(save_path, sep=sep, header=True)
+
+    def _qa_topics(self, topics_df):
+        topic_sums = topics_df.sum(axis=1).values
+        passed = np.fabs((topic_sums - 1)).max() < 0.1
+        msg = '=' * 79 + '\n'
+        msg += "Topics QA test passed:  %s\n" % passed
+        print(msg)
     
     def _get_topics_df(self):
         topics_df = pd.concat((pd.Series(dict(doc)) for doc in 
