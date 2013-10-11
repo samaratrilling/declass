@@ -1,12 +1,15 @@
 import unittest
 from StringIO import StringIO
 import sys
-from numpy.testing import assert_allclose
 from datetime import datetime
 import copy
 from collections import Counter, OrderedDict
 
-from declass.utils import text_processors
+import pandas as pd
+from numpy.testing import assert_allclose
+from pandas.util.testing import assert_frame_equal
+
+from declass.utils import text_processors, vw_helpers
 
 
 class TestTokenizerBasic(unittest.TestCase):
@@ -41,3 +44,43 @@ class TestVWFormatter(unittest.TestCase):
         benchmark = {'hello': 1.0, 'bye': 2.0}
         self.assertEqual(result, benchmark)
 
+
+class TestVWHelpers(unittest.TestCase):
+    def setUp(self):
+        self.varinfo_path = 'files/varinfo'
+        self.topics_file_1 = StringIO(
+            "Version 7.3\nlabel: 11\n"
+            "0 1.1 2.2\n"
+            "1 1.11 2.22")
+        self.num_topics_1 = 2
+        self.prediction_files_1 = StringIO(
+            "1.1 2.2 doc1\n"
+            "1.11 2.22 doc2")
+
+    def test_parse_varinfo_01(self):
+        result = vw_helpers.parse_varinfo(self.varinfo_path)
+        benchmark = pd.DataFrame(
+            {
+                'FeatureName': ['bcc', 'illiquids'], 
+                'HashVal': [77964, 83330], 
+                'MaxVal': [1., 2.], 
+                'MinVal': [0., 5.], 
+                'RelScore': [1., 0.6405],
+                'Weight': [0.2789, -0.1786]})
+        assert_frame_equal(result, benchmark)
+
+    def test_parse_lda_topics_01(self):
+        result = vw_helpers.parse_lda_topics(
+            self.topics_file_1, self.num_topics_1)
+        benchmark = pd.DataFrame(
+            {'HashVal': [0, 1], 'topic_0': [1.1, 1.11], 'topic_1': [2.2, 2.22]}
+            )
+        assert_frame_equal(result, benchmark)
+
+    def test_parse_lda_predictions_01(self):
+        result = vw_helpers.parse_lda_predictions(
+            self.prediction_files_1, self.num_topics_1)
+        benchmark = pd.DataFrame(
+            {'doc_id': ['doc1', 'doc2'], 'topic_0': [1.1, 1.11],
+                'topic_1': [2.2, 2.22]})
+        assert_frame_equal(result, benchmark)
