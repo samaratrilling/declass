@@ -48,6 +48,20 @@ class BaseTokenizer(object):
         return self.text_to_token_list(text)
 
 
+class MakeTokenizer(BaseTokenizer):
+    """
+    Makes a subclass of BaseTokenizer out of a function.
+    """
+    def __init__(self, tokenizer_func):
+        """
+        Parameters
+        ----------
+        tokenizer_func : Function
+            Takes in strings, spits out lists of strings.
+        """
+        self.text_to_token_list = tokenizer_func
+
+
 class TokenizerBasic(BaseTokenizer):
     """
     A simple tokenizer.  Extracts word counts from text.
