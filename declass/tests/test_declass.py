@@ -53,34 +53,47 @@ class TestVWHelpers(unittest.TestCase):
             "0 1.1 2.2\n"
             "1 1.11 2.22")
         self.num_topics_1 = 2
-        self.prediction_files_1 = StringIO(
+        self.predictions_file_1 = StringIO(
+            "0.0 0.0 doc1\n"
+            "0.0 0.0 doc2\n"
             "1.1 2.2 doc1\n"
             "1.11 2.22 doc2")
+        self.start_line_1 = 2
 
     def test_parse_varinfo_01(self):
         result = vw_helpers.parse_varinfo(self.varinfo_path)
         benchmark = pd.DataFrame(
             {
-                'FeatureName': ['bcc', 'illiquids'], 
-                'HashVal': [77964, 83330], 
-                'MaxVal': [1., 2.], 
-                'MinVal': [0., 5.], 
-                'RelScore': [1., 0.6405],
-                'Weight': [0.2789, -0.1786]})
+                'feature_name': ['bcc', 'illiquids'], 
+                'hash_val': [77964, 83330], 
+                'max_val': [1., 2.], 
+                'min_val': [0., 5.], 
+                'rel_score': [1., 0.6405],
+                'weight': [0.2789, -0.1786]}).set_index('hash_val')
         assert_frame_equal(result, benchmark)
 
     def test_parse_lda_topics_01(self):
         result = vw_helpers.parse_lda_topics(
-            self.topics_file_1, self.num_topics_1)
+            self.topics_file_1, self.num_topics_1, normalize=False)
         benchmark = pd.DataFrame(
-            {'HashVal': [0, 1], 'topic_0': [1.1, 1.11], 'topic_1': [2.2, 2.22]}
-            )
+            {'hash_val': [0, 1], 'topic_0': [1.1, 1.11], 'topic_1': [2.2, 2.22]}
+            ).set_index('hash_val')
         assert_frame_equal(result, benchmark)
 
     def test_parse_lda_predictions_01(self):
         result = vw_helpers.parse_lda_predictions(
-            self.prediction_files_1, self.num_topics_1)
+            self.predictions_file_1, self.num_topics_1, self.start_line_1,
+            normalize=False)
         benchmark = pd.DataFrame(
             {'doc_id': ['doc1', 'doc2'], 'topic_0': [1.1, 1.11],
-                'topic_1': [2.2, 2.22]})
+                'topic_1': [2.2, 2.22]}).set_index('doc_id')
         assert_frame_equal(result, benchmark)
+
+    def test_find_start_line_lda_predictions(self):
+        result = vw_helpers.find_start_line_lda_predictions(
+            self.predictions_file_1, self.num_topics_1)
+        self.assertEqual(result, 2)
+
+
+
+

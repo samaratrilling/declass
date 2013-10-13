@@ -1,9 +1,12 @@
-from collections import Counter
+from collections import Counter, defaultdict
 from functools import partial
+from zlib import adler32
+from random import randint
 
 import nltk
 
 from . import filefilter, nlp, common
+from common import lazyprop
 
 
 class BaseTokenizer(object):
@@ -157,6 +160,10 @@ class SparseFormatter(object):
         -------
         record_dict : Dict
             possible keys = 'target', 'importance', 'doc_id', 'feature_values'
+
+        Notes
+        -----
+        rstrips newline characters from sstr before parsing.
         """
         sstr = sstr.rstrip('\n').rstrip('\r')
 
@@ -391,3 +398,112 @@ class SVMLightFormatter(SparseFormatter):
         return {'target': float(preamble)}
 
 
+class SFileFilter(object):
+    """
+    Filters results stored in sfiles (sparsely formattted bag-of-words files).
+    """
+    def __init__(self, formatter, bit_precision=18):
+        """
+        Parameters
+        ----------
+        formatter : Subclass of SparseFormatter
+        bit_precision : Integer
+            Hashes are taken modulo 2**bit_precision.  Currently must by < 32.
+        """
+        assert isinstance(bit_precision, int)
+
+        self.formatter = formatter
+        self.bit_precision = bit_precision
+
+        self.sfile_loaded = False
+        self.hash_fun = adler32  # TODO Find a better hash function
+
+    def load_sfile(self, sfile):
+        """
+        Load an sfile, building self.token2hash and self.hash2token.
+
+        Parameters
+        ----------
+        sfile : String or open file
+            The sparse formatted file we will load.
+        """
+        # TODO Allow loading of more than one sfile
+        assert not self.sfile_loaded
+
+        # Build token2hash
+        token2hash, token_score, in_doc_count = self._load_sfile_fwd(sfile)
+
+        # Build hash2token
+        token2hash, hash2token = self._load_sfile_rev(token2hash)
+
+        self.token2hash = token2hash
+        self.token_score = token_score
+        self.in_doc_count = in_doc_count
+        self.hash2token = hash2token
+
+        self.sfile_loaded = True
+
+    def _load_sfile_fwd(self, sfile):
+        """
+        Builds the "forward" objects involved in loading an sfile.
+        """
+        token2hash = {}
+        token_score = defaultdict(float)
+        in_doc_count = defaultdict(int)
+
+        open_file, was_path = common.openfile_wrap(sfile, 'r')
+
+        tokens_in_doc = set()
+        for line in open_file:
+            record_dict = self.formatter.sstr_to_dict(line)
+            for token, value in record_dict.iteritems():
+                token2hash[token] = self.hash_fun(token)
+                tokens_in_doc.add(token)
+                token_score[token] += value
+        
+        if was_path:
+            open_file.close()
+
+        for token in tokens_in_doc:
+            in_doc_count[token] += 1
+
+        return token2hash, token_score, in_doc_count
+
+    def _load_sfile_rev(self, token2hash):
+        """
+        Builds the "reverse" objects involved in loading an sfile.  Will modify
+        token2hash if necessary to preserve 1-1 mapping.
+        """
+        all_tokens = token2hash.keys()
+        all_hashes = token2hash.values()
+        hash_counts = Counter(all_hashes)
+        for token, hash_value in zip(all_tokens, all_hashes):
+            if hash_counts[hash_value] == 1:
+                self.hash2token[hash_value] = token
+            else:
+
+        return token2hash, hash2token
+
+
+    def filter_sfile(self, infile, outfile):
+        pass
+
+    def remove_extreme_tokens(self, num_below=5, frac_above=0.5):
+        pass
+
+    def remove_tokens(self, token_list):
+        pass
+
+    def add_doc_id_filter(self, doc_id, enforce_exact=True):
+        pass
+
+    def _collision_probability(self, vocab_size, bit_precision):
+        """
+        Approximate probability of collision (assuming perfect hashing) given
+        vocab_size and bit_precision of hash function.
+        """
+        return vocab_size**2 / 2.**(bit_precision + 1)
+
+
+# TODO : Make this have a "dict" attribute that has many dict-like methods
+# TODO : Should this object even hash....why not just add in sequence?  No need to compute a hash (other than implicityly while checking if item in self.dict).  The most common use-case is bulk adding of files...
