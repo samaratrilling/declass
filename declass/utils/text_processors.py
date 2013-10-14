@@ -1,9 +1,11 @@
 from collections import Counter, defaultdict
 from functools import partial
-from zlib import adler32
-from random import randint
+from hashlib import sha224
+import random
+import copy
 
 import nltk
+import numpy as np
 
 from . import filefilter, nlp, common
 from common import lazyprop
@@ -410,13 +412,21 @@ class SFileFilter(object):
         bit_precision : Integer
             Hashes are taken modulo 2**bit_precision.  Currently must by < 32.
         """
-        assert isinstance(bit_precision, int)
+        assert isinstance(bit_precision, int) and bit_precision <= 32
 
         self.formatter = formatter
         self.bit_precision = bit_precision
 
+        self.precision = 2**bit_precision
         self.sfile_loaded = False
-        self.hash_fun = adler32  # TODO Find a better hash function
+
+    def hash_fun(self, token):
+        # TODO This is a slow high precision function...no need for that much
+        # precision!  zlib.adler32 has too many collisions...
+        # VW uses 32 bit murmerhash
+        hexhash = sha224(token).hexdigest()
+
+        return int(hexhash, 16) % self.precision
 
     def load_sfile(self, sfile):
         """
@@ -431,14 +441,14 @@ class SFileFilter(object):
         assert not self.sfile_loaded
 
         # Build token2hash
-        token2hash, token_score, in_doc_count = self._load_sfile_fwd(sfile)
+        token2hash, token_score, num_docs_in = self._load_sfile_fwd(sfile)
 
         # Build hash2token
-        token2hash, hash2token = self._load_sfile_rev(token2hash)
+        hash2token = self._load_sfile_rev(token2hash)
 
         self.token2hash = token2hash
         self.token_score = token_score
-        self.in_doc_count = in_doc_count
+        self.num_docs_in = num_docs_in
         self.hash2token = hash2token
 
         self.sfile_loaded = True
@@ -449,41 +459,97 @@ class SFileFilter(object):
         """
         token2hash = {}
         token_score = defaultdict(float)
-        in_doc_count = defaultdict(int)
+        num_docs_in = defaultdict(int)
 
         open_file, was_path = common.openfile_wrap(sfile, 'r')
 
-        tokens_in_doc = set()
+        # Each line represents one document
         for line in open_file:
+            tokens_in_doc = set()
             record_dict = self.formatter.sstr_to_dict(line)
-            for token, value in record_dict.iteritems():
+            for token, value in record_dict['feature_values'].iteritems():
                 token2hash[token] = self.hash_fun(token)
                 tokens_in_doc.add(token)
                 token_score[token] += value
+
+            for token in tokens_in_doc:
+                num_docs_in[token] += 1
         
         if was_path:
             open_file.close()
 
-        for token in tokens_in_doc:
-            in_doc_count[token] += 1
+        return token2hash, token_score, num_docs_in
 
-        return token2hash, token_score, in_doc_count
+    def _load_sfile_rev(self, token2hash, seed=None):
+        """
+        Builds the "reverse" objects involved in loading an sfile.
 
-    def _load_sfile_rev(self, token2hash):
+        Returns
+        -------
+        hash2token : Dict
         """
-        Builds the "reverse" objects involved in loading an sfile.  Will modify
-        token2hash if necessary to preserve 1-1 mapping.
-        """
+        hash2token = {}
+
         all_tokens = token2hash.keys()
         all_hashes = token2hash.values()
         hash_counts = Counter(all_hashes)
+        
+        # Make sure we don't have too many collisions
+        vocab_size = len(all_tokens)
+        num_collisions = vocab_size - len(hash_counts)
+        if num_collisions > vocab_size / 20.:
+            msg = (
+                "num_collisions = %d.  vocab_size = %d.  Try using the "
+                "function collision_probability to estimate needed precision" 
+                % ( num_collisions, vocab_size))
+            raise CollisionError(msg)
+
+        collisions = set()
         for token, hash_value in zip(all_tokens, all_hashes):
             if hash_counts[hash_value] == 1:
-                self.hash2token[hash_value] = token
+                hash2token[hash_value] = token
             else:
+                collisions.add(token)
 
-        return token2hash, hash2token
+        self._resolve_collisions(
+            collisions, hash_counts, token2hash, hash2token, seed=seed)
 
+        return hash2token
+
+    def _resolve_collisions(
+        self, collisions, hash_counts, token2hash, hash2token, seed=None):
+        """
+        Function used to resolve collisions.  Finds a hash value not already
+        used using a "random probe" method.
+
+        Parameters
+        ----------
+        collisions : Set of tokens
+        hash_counts : Dict
+            keys = hash_values, values = number of times each hash_value
+            appears in token2hash
+        token2hash : Dict
+        hash2token : Dict
+        """
+        # Seed for testing
+        random.seed(seed)
+
+        for token in collisions:
+            old_hash = token2hash[token]
+            new_hash = old_hash
+            # If hash_counts[old_hash] > 1, then the collision still must be
+            # resolved.  In that case, change new_hash and update hash_counts
+            if hash_counts[old_hash] > 1:
+                # hash_counts is the only dict (at this time) holding every
+                # hash you have ever seen
+                while new_hash in hash_counts:
+                    new_hash = random.randint(0, self.precision - 1)
+                    new_hash = new_hash % self.precision
+                hash_counts[old_hash] -= 1
+                hash_counts[new_hash] = 1
+            # Update dictionaries
+            hash2token[new_hash] = token
+            token2hash[token] = new_hash
 
     def filter_sfile(self, infile, outfile):
         pass
@@ -497,13 +563,23 @@ class SFileFilter(object):
     def add_doc_id_filter(self, doc_id, enforce_exact=True):
         pass
 
-    def _collision_probability(self, vocab_size, bit_precision):
-        """
-        Approximate probability of collision (assuming perfect hashing) given
-        vocab_size and bit_precision of hash function.
-        """
-        return vocab_size**2 / 2.**(bit_precision + 1)
 
+def collision_probability(self, vocab_size, bit_precision):
+    """
+    Approximate probability of collision (assuming perfect hashing)
+
+    Parameters
+    ----------
+    vocab_size : Integer
+        Number of unique words in vocabulary
+    bit_precision : Integer
+        Number of bits in space we are hashing to
+    """
+    return vocab_size**2 / 2.**(bit_precision + 1)
+
+
+class CollisionError(Exception):
+    pass
 
 # TODO : Make this have a "dict" attribute that has many dict-like methods
 # TODO : Should this object even hash....why not just add in sequence?  No need to compute a hash (other than implicityly while checking if item in self.dict).  The most common use-case is bulk adding of files...
