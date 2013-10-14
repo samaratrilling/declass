@@ -32,20 +32,22 @@ class TestVWFormatter(unittest.TestCase):
     def setUp(self):
         self.formatter = text_processors.VWFormatter()
 
-    def test_format_01(self):
+    def test_get_sstr_01(self):
         doc_id = 'myname'
         feature_values = OrderedDict([('hello', 1), ('dude', 3)])
         importance = 1
         result = self.formatter.get_sstr(
             feature_values=feature_values, doc_id=doc_id,
             importance=importance)
-        benchmark = "'%s | hello:1 dude:3" % doc_id
+        benchmark = " 1 %s| hello:1 dude:3" % doc_id
         self.assertEqual(result, benchmark)
 
     def test_write_dict_01(self):
-        record_str = "1 | hello:1 bye:2"
-        result = self.formatter.write_dict(record_str)
-        benchmark = {'hello': 1.0, 'bye': 2.0}
+        record_str = " 3.2 doc_id1| hello:1 bye:2"
+        result = self.formatter.sstr_to_dict(record_str)
+        benchmark = {
+            'importance': 3.2, 'doc_id': 'doc_id1',
+            'feature_values': {'hello': 1, 'bye': 2}}
         self.assertEqual(result, benchmark)
 
 
@@ -104,6 +106,7 @@ class TestSFileFilter(unittest.TestCase):
         self.outfile = StringIO()
         formatter = text_processors.VWFormatter()
         self.sfile_filter = text_processors.SFileFilter(formatter)
+        self.hash_fun = self.sfile_filter._get_hash_fun()
     
     @property
     def sfile_1(self):
@@ -112,11 +115,12 @@ class TestSFileFilter(unittest.TestCase):
             " 1 doc2| word1:1.1 word3:2")
 
     def test_load_sfile_fwd_1(self):
-        token2hash, token_score, num_docs_in = (
+        token2hash, token_score, doc_freq, num_docs = (
             self.sfile_filter._load_sfile_fwd(self.sfile_1))
+        self.assertEqual(num_docs, 2)
         self.assertEqual(len(token2hash), 3)
         self.assertEqual(token_score, {'word1': 2.1, 'word2': 2, 'word3': 2})
-        self.assertEqual(num_docs_in, {'word1': 2, 'word2': 1, 'word3': 1})
+        self.assertEqual(doc_freq, {'word1': 2, 'word2': 1, 'word3': 1})
 
     def test_load_sfile_rev_1(self):
         # No collisions
@@ -150,13 +154,13 @@ class TestSFileFilter(unittest.TestCase):
         token2hash_rev = {v: k for k, v in token2hash.iteritems()}
         self.assertEqual(token2hash_rev, hash2token)
 
-    def check_keys(self, sfile_filter, benchmark):
+    def check_keys(self, sfile_filter, benchmark_key_list):
         all_keys = [
             sfile_filter.token2hash.keys(), sfile_filter.token_score.keys(),
-            sfile_filter.num_docs_in.keys()]
+            sfile_filter.doc_freq.keys()]
 
         for keys in all_keys:
-            self.assertEqual(set(keys), set(benchmark))
+            self.assertEqual(set(keys), set(benchmark_key_list))
 
     def test_load_sfile_1(self):
         self.sfile_filter.load_sfile(self.sfile_1)
@@ -167,16 +171,72 @@ class TestSFileFilter(unittest.TestCase):
         self.sfile_filter.remove_tokens('word1')
         self.check_keys(self.sfile_filter, ['word2', 'word3'])
 
-    def test_filter_sfile(self):
+    def test_remove_extreme_tokens_1(self):
+        self.sfile_filter.load_sfile(self.sfile_1)
+        self.sfile_filter.remove_extreme_tokens(doc_freq_min=2)
+        self.check_keys(self.sfile_filter, ['word1'])
+
+    def test_remove_extreme_tokens_2(self):
+        self.sfile_filter.load_sfile(self.sfile_1)
+        self.sfile_filter.remove_extreme_tokens(doc_freq_max=1)
+        self.check_keys(self.sfile_filter, ['word2', 'word3'])
+
+    def test_remove_extreme_tokens_3(self):
+        self.sfile_filter.load_sfile(self.sfile_1)
+        self.sfile_filter.remove_extreme_tokens(doc_fraction_max=0.5)
+        self.check_keys(self.sfile_filter, ['word2', 'word3'])
+
+    def test_remove_extreme_tokens_4(self):
+        self.sfile_filter.load_sfile(self.sfile_1)
+        self.sfile_filter.remove_extreme_tokens(doc_fraction_min=0.8)
+        self.check_keys(self.sfile_filter, ['word1'])
+
+    def test_filter_sfile_1(self):
         self.sfile_filter.load_sfile(self.sfile_1)
         self.sfile_filter.remove_tokens('word1')
         self.sfile_filter.filter_sfile(self.sfile_1, self.outfile)
         result = self.outfile.getvalue()
-        hash_fun = self.sfile_filter.hash_fun
         benchmark = (
             " 1 doc1| %d:2\n"
-            " 1 doc2| %d:2\n" % (hash_fun('word2'), hash_fun('word3')))
+            " 1 doc2| %d:2\n" %
+            (self.hash_fun('word2'), self.hash_fun('word3')))
         self.assertEqual(result, benchmark)
 
+    def test_filter_sfile_2(self):
+        self.sfile_filter.load_sfile(self.sfile_1)
+        self.sfile_filter.filter_sfile(
+            self.sfile_1, self.outfile, doc_id_list=['doc1'])
+        result = self.outfile.getvalue()
+        benchmark = (
+            " 1 doc1| %d:1 %s:2\n" % 
+            (self.hash_fun('word1'), self.hash_fun('word2')))
+        self.assertEqual(result, benchmark)
+
+    def test_filter_sfile_3(self):
+        self.sfile_filter.load_sfile(self.sfile_1)
+        self.sfile_filter.remove_tokens('word1')
+        self.sfile_filter.filter_sfile(
+            self.sfile_1, self.outfile, doc_id_list=['doc1'])
+        result = self.outfile.getvalue()
+        benchmark = (" 1 doc1| %s:2\n" % (self.hash_fun('word2')))
+        self.assertEqual(result, benchmark)
+
+    def test_filter_sfile_4(self):
+        self.sfile_filter.load_sfile(self.sfile_1)
+        self.sfile_filter.filter_sfile(
+            self.sfile_1, self.outfile, doc_id_list=['doc1', 'unseen'],
+            enforce_all_doc_id=False)
+        result = self.outfile.getvalue()
+        benchmark = (
+            " 1 doc1| %d:1 %s:2\n" % 
+            (self.hash_fun('word1'), self.hash_fun('word2')))
+        self.assertEqual(result, benchmark)
+
+    def test_filter_sfile_5(self):
+        self.sfile_filter.load_sfile(self.sfile_1)
+        with self.assertRaises(AssertionError) as cm:
+            self.sfile_filter.filter_sfile(
+                self.sfile_1, self.outfile, doc_id_list=['doc1', 'unseen'])
+    
     def tearDown(self):
         self.outfile.close()

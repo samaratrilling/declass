@@ -4,13 +4,14 @@ import hashlib
 import zlib
 import random
 import copy
+import cPickle
 
 import nltk
 import numpy as np
 import pandas as pd
 
 from . import filefilter, nlp, common
-from common import lazyprop
+from common import lazyprop, smart_open
 
 
 class BaseTokenizer(object):
@@ -149,14 +150,11 @@ class SparseFormatter(object):
             # If the feature is an int, then store an int.  If float...
             # If no value, default to 1
             if value:
-                try:
-                    value_to_use = int(value)
-                except ValueError:
-                    value_to_use = float(value)
+                value_to_use = self._string_to_number(value)
             else:
                 value_to_use = 1
 
-            feature_values.update({feature: value_to_use})
+            feature_values[feature] =  value_to_use
 
         return feature_values
 
@@ -270,11 +268,15 @@ class SparseFormatter(object):
 class VWFormatter(SparseFormatter):
     """
     Converts in and out of VW format (namespaces currently not supported).
-    https://github.com/JohnLangford/vowpal_wabbit/wiki/Input-format
+    Many valid VW inputs are possible, we ONLY support
 
     [target] [Importance [Tag]]| feature1[:value1] feature2[:value2] ...
 
     Every single whitespace, pipe, colon, and newline is significant.
+
+    See:
+    https://github.com/JohnLangford/vowpal_wabbit/wiki/Input-format
+    http://hunch.net/~vw/validate.html
     """
     def __init__(self):
         self.format_name = 'vw'
@@ -364,9 +366,20 @@ class VWFormatter(SparseFormatter):
             ('doc_id', doc_id), ('target', target), ('importance', importance))
         for key, value in items:
             if value:
-                parsed[key] = value
+                if key in ['target', 'importance']:
+                    parsed[key] = self._string_to_number(value)
+                else:
+                    parsed[key] = value
         
         return parsed
+
+    def _string_to_number(self, string):
+        try:
+            number = int(string)
+        except ValueError:
+            number = float(string)
+
+        return number
 
 
 class SVMLightFormatter(SparseFormatter):
@@ -436,9 +449,8 @@ class SFileFilter(object):
 
         self.precision = 2**bit_precision
         self.sfile_loaded = False
-        self._set_hash_fun(bit_precision)
 
-    def _set_hash_fun(self, bit_precision):
+    def _get_hash_fun(self):
         """
         The fastest is the built in function hash.  Quick experimentation
         shows that this function maps similar words to similar values (not
@@ -446,13 +458,15 @@ class SFileFilter(object):
 
         hashlib.sha224 is up to 224 bit.
         """
-        if bit_precision <= 64:
-            self.hash_fun = lambda w: hash(w) % self.precision
-        elif bit_precision <= 224:
-            self.hash_fun = lambda w: (
+        if self.bit_precision <= 64:
+            hash_fun = lambda w: hash(w) % self.precision
+        elif self.bit_precision <= 224:
+            hash_fun = lambda w: (
                 int(hashlib.sha224(w).hexdigest(), 16) % self.precision)
         else:
             raise ValueError("Precision above 224 bit not supported")
+        
+        return hash_fun
 
     def load_sfile(self, sfile):
         """
@@ -467,35 +481,19 @@ class SFileFilter(object):
         assert not self.sfile_loaded
 
         # Build token2hash
-        token2hash, token_score, num_docs_in = self._load_sfile_fwd(sfile)
+        token2hash, token_score, doc_freq, num_docs = (
+            self._load_sfile_fwd(sfile))
 
         # Build hash2token
         hash2token = self._load_sfile_rev(token2hash)
 
         self.token2hash = token2hash
         self.token_score = token_score
-        self.num_docs_in = num_docs_in
+        self.doc_freq = doc_freq
         self.hash2token = hash2token
+        self.num_docs = num_docs
 
         self.sfile_loaded = True
-
-    def to_frame(self):
-        """
-        Return a dataframe representation of self.
-        """
-        token2hash = self.token2hash
-        token_score = self.token_score
-        num_docs_in = self.num_docs_in
-
-        assert token2hash.keys() == token_score.keys() == num_docs_in.keys()
-        frame = pd.DataFrame(
-            {'hash': token2hash.values(),
-             'token_score': token_score.values(),
-             'num_docs_in': num_docs_in.values()},
-            index=token2hash.keys())
-        frame.index.name = 'token'
-
-        return frame
 
     def _load_sfile_fwd(self, sfile):
         """
@@ -503,23 +501,27 @@ class SFileFilter(object):
         """
         token2hash = {}
         token_score = defaultdict(float)
-        num_docs_in = defaultdict(int)
+        doc_freq = defaultdict(int)
+        num_docs = 0
+
+        hash_fun = self._get_hash_fun()
 
         open_file, was_path = common.openfile_wrap(sfile, 'r')
 
         # Each line represents one document
         for line in open_file:
+            num_docs += 1
             record_dict = self.formatter.sstr_to_dict(line)
             for token, value in record_dict['feature_values'].iteritems():
-                hash_value = self.hash_fun(token)
+                hash_value = hash_fun(token)
                 token2hash[token] = hash_value
                 token_score[token] += value
-                num_docs_in[token] += 1
+                doc_freq[token] += 1
 
         if was_path:
             open_file.close()
 
-        return token2hash, token_score, num_docs_in
+        return token2hash, token_score, doc_freq, num_docs
 
     def _load_sfile_rev(self, token2hash, seed=None):
         """
@@ -559,6 +561,24 @@ class SFileFilter(object):
 
         return hash2token
 
+    def to_frame(self):
+        """
+        Return a dataframe representation of self.
+        """
+        token2hash = self.token2hash
+        token_score = self.token_score
+        doc_freq = self.doc_freq
+
+        assert token2hash.keys() == token_score.keys() == doc_freq.keys()
+        frame = pd.DataFrame(
+            {'hash': token2hash.values(),
+             'token_score': token_score.values(),
+             'doc_freq': doc_freq.values()},
+            index=token2hash.keys())
+        frame.index.name = 'token'
+
+        return frame
+
     def _resolve_collisions(
         self, collisions, hash_counts, token2hash, hash2token, seed=None):
         """
@@ -594,7 +614,8 @@ class SFileFilter(object):
             hash2token[new_hash] = token
             token2hash[token] = new_hash
 
-    def filter_sfile(self, infile, outfile):
+    def filter_sfile(
+        self, infile, outfile, doc_id_list=None, enforce_all_doc_id=True):
         """
         Change tokens to hash values (using self.token2hash) and remove
         tokens not in self.token2hash.
@@ -603,8 +624,14 @@ class SFileFilter(object):
         ----------
         infile : file path or buffer
         outfile : file path or buffer
+        doc_id_list : Iterable over strings
+            Remove rows with doc_id not in this list
+        enforce_all_doc_id : Boolean
+            If True (and doc_id is not None), raise exception unless all doc_id
+            in doc_id_list are seen.
         """
         assert self.sfile_loaded, "Must load an sfile before you can filter"
+        extra_filter = self._get_extra_filter(doc_id_list)
 
         open_infile, infile_was_path = common.openfile_wrap(infile, 'r')
         open_outfile, outfile_was_path = common.openfile_wrap(outfile, 'w')
@@ -612,22 +639,75 @@ class SFileFilter(object):
         # Each line represents one document
         for line in open_infile:
             record_dict = self.formatter.sstr_to_dict(line)
-            record_dict['feature_values'] = {
-                self.token2hash[token]: value 
-                for token, value in record_dict['feature_values'].iteritems() 
-                if token in self.token2hash}
-            new_sstr = self.formatter.get_sstr(**record_dict)
-            open_outfile.write(new_sstr + '\n')
+            if extra_filter(record_dict):
+                record_dict['feature_values'] = {
+                    self.token2hash[token]: value 
+                    for token, value
+                    in record_dict['feature_values'].iteritems() 
+                    if token in self.token2hash}
+                new_sstr = self.formatter.get_sstr(**record_dict)
+                open_outfile.write(new_sstr + '\n')
 
         if infile_was_path:
             open_infile.close()
         if outfile_was_path:
             open_outfile.close()
 
-    def remove_extreme_tokens(self, num_below=5, frac_above=0.5):
+        self._done_check(enforce_all_doc_id)
+
+    def _get_extra_filter(self, doc_id_list):
+        self._doc_id_seen = set()
+
+        # Possible filters to use
+        if doc_id_list is not None:
+            self._doc_id_set = set(doc_id_list)
+            def doc_id_filter(record_dict):
+                doc_id = record_dict['doc_id']
+                self._doc_id_seen.add(doc_id)
+
+                return doc_id in self._doc_id_set
+        else:
+            self._doc_id_set = set()
+            doc_id_filter = lambda record_dict: True
+
+        # Add together all the filters into one function
+        return lambda record_dict: doc_id_filter(record_dict)
+
+    def _done_check(self, enforce_all_doc_id):
+        """
+        QA check to perform once we're done filtering an sfile.
+        """
+        # Make sure we saw all the doc_id we're supposed to
+        if enforce_all_doc_id:
+            assert self._doc_id_set.issubset(self._doc_id_seen), (
+                "Did not see every doc_id in the passed doc_id_list")
+
+    def remove_extreme_tokens(
+        self, doc_freq_min=0, doc_freq_max=np.inf, doc_fraction_min=0,
+        doc_fraction_max=1):
+        """
+        Remove extreme tokens from self (calling self.remove_tokens).
+
+        Parameters
+        ----------
+        doc_freq_min : Integer
+            Remove tokens that in less than this number of documents
+        doc_freq_max : Integer
+        doc_fraction_min : Float in [0, 1]
+            Remove tokens that are in less than this fraction of documents
+        doc_fraction_max : Float in [0, 1]
+        """
         frame = self.to_frame()
-        import pdb;         pdb.set_trace() ########## F7 Breakpoint ##########
-        pass
+        to_remove_mask = (
+                  (frame.doc_freq < doc_freq_min)
+                | (frame.doc_freq > doc_freq_max)
+                | (frame.doc_freq < (doc_fraction_min * self.num_docs))
+                | (frame.doc_freq > (doc_fraction_max * self.num_docs))
+                )
+        
+        self._print(
+            "Removed %d/%d tokens" % (to_remove_mask.sum(), len(frame)))
+        self.remove_tokens(frame[to_remove_mask].index)
 
     def remove_tokens(self, tokens):
         """
@@ -647,10 +727,7 @@ class SFileFilter(object):
             self.hash2token.pop(hash_value)
             self.token2hash.pop(tok)
             self.token_score.pop(tok)
-            self.num_docs_in.pop(tok)
-
-    def add_doc_id_filter(self, doc_id, enforce_exact=True):
-        pass
+            self.doc_freq.pop(tok)
 
     def _print(self, msg):
         if self.verbose:
@@ -660,6 +737,30 @@ class SFileFilter(object):
     def vocab_size(self):
         return len(self.token2hash)
 
+    def save(self, savefile):
+        """
+        Pickle self to outfile.
+
+        Parameters
+        ----------
+        savefile : filepath or buffer
+        """
+        with smart_open(savefile, 'w') as f:
+            cPickle.dump(self, f)
+
+    @classmethod
+    def load(cls, loadfile):
+        """
+        Pickle SFileFilter from disk.
+
+        Parameters
+        ----------
+        loadfile : filepath or buffer
+        """
+        with smart_open(loadfile, 'rb') as f:
+            new_sfile_filter = cPickle.load(f)
+
+        return new_sfile_filter
 
 def collision_probability(vocab_size, bit_precision):
     """

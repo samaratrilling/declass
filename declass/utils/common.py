@@ -212,6 +212,36 @@ def openfile_wrap(filename, mode):
     return opened_file, was_path
 
 
+class smart_open(object):
+    """Context manager that opens a filename and closes it on exit, but does
+    nothing for file-like objects.
+    """
+    def __init__(self, filename, *args):
+        """
+        Parmeters
+        ---------
+        filename : filepath, buffer, or StringIO
+        args : Optional args
+            First arg will be 'mode', e.g. 'r', 'rb', 'w'
+            Second arg will be 'buffering', read the docs for open
+        """
+        if isinstance(filename, basestring):
+            self.fh = open(filename, *args)
+            self.closing = True
+        else:
+            self.fh = filename
+            self.closing = False
+
+    def __enter__(self):
+        return self.fh
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if self.closing:
+            self.fh.close()
+
+        return False
+
+
 ################################################################################
 # Functions to read special file formats
 ################################################################################
