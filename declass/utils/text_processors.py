@@ -1,11 +1,13 @@
 from collections import Counter, defaultdict
 from functools import partial
-from hashlib import sha224
+import hashlib
+import zlib
 import random
 import copy
 
 import nltk
 import numpy as np
+import pandas as pd
 
 from . import filefilter, nlp, common
 from common import lazyprop
@@ -144,8 +146,17 @@ class SparseFormatter(object):
         feature_values_list = feature_str.split()
         for fv in feature_values_list:
             feature, value = fv.split(':')
-            value = float(value) if value else 1.0
-            feature_values.update({feature: value})
+            # If the feature is an int, then store an int.  If float...
+            # If no value, default to 1
+            if value:
+                try:
+                    value_to_use = int(value)
+                except ValueError:
+                    value_to_use = float(value)
+            else:
+                value_to_use = 1
+
+            feature_values.update({feature: value_to_use})
 
         return feature_values
 
@@ -312,6 +323,11 @@ class VWFormatter(SparseFormatter):
         for word, count in feature_values.iteritems():
             formatted += "%s:%s " % (word, count)
 
+        # Remove the trailing space...not required but it's screwy to have a
+        # space-delimited file with a trailing space but nothing after it!
+        if len(feature_values) > 0:
+            formatted = formatted.rstrip()
+
         return formatted
 
     def _parse_preamble(self, preamble):
@@ -404,7 +420,7 @@ class SFileFilter(object):
     """
     Filters results stored in sfiles (sparsely formattted bag-of-words files).
     """
-    def __init__(self, formatter, bit_precision=18):
+    def __init__(self, formatter, bit_precision=32, verbose=False):
         """
         Parameters
         ----------
@@ -412,21 +428,31 @@ class SFileFilter(object):
         bit_precision : Integer
             Hashes are taken modulo 2**bit_precision.  Currently must by < 32.
         """
-        assert isinstance(bit_precision, int) and bit_precision <= 32
+        assert isinstance(bit_precision, int)
 
         self.formatter = formatter
         self.bit_precision = bit_precision
+        self.verbose = verbose
 
         self.precision = 2**bit_precision
         self.sfile_loaded = False
+        self._set_hash_fun(bit_precision)
 
-    def hash_fun(self, token):
-        # TODO This is a slow high precision function...no need for that much
-        # precision!  zlib.adler32 has too many collisions...
-        # VW uses 32 bit murmerhash
-        hexhash = sha224(token).hexdigest()
+    def _set_hash_fun(self, bit_precision):
+        """
+        The fastest is the built in function hash.  Quick experimentation
+        shows that this function maps similar words to similar values (not
+        cryptographic) and therefore increases collisions...no big deal.
 
-        return int(hexhash, 16) % self.precision
+        hashlib.sha224 is up to 224 bit.
+        """
+        if bit_precision <= 64:
+            self.hash_fun = lambda w: hash(w) % self.precision
+        elif bit_precision <= 224:
+            self.hash_fun = lambda w: (
+                int(hashlib.sha224(w).hexdigest(), 16) % self.precision)
+        else:
+            raise ValueError("Precision above 224 bit not supported")
 
     def load_sfile(self, sfile):
         """
@@ -453,6 +479,24 @@ class SFileFilter(object):
 
         self.sfile_loaded = True
 
+    def to_frame(self):
+        """
+        Return a dataframe representation of self.
+        """
+        token2hash = self.token2hash
+        token_score = self.token_score
+        num_docs_in = self.num_docs_in
+
+        assert token2hash.keys() == token_score.keys() == num_docs_in.keys()
+        frame = pd.DataFrame(
+            {'hash': token2hash.values(),
+             'token_score': token_score.values(),
+             'num_docs_in': num_docs_in.values()},
+            index=token2hash.keys())
+        frame.index.name = 'token'
+
+        return frame
+
     def _load_sfile_fwd(self, sfile):
         """
         Builds the "forward" objects involved in loading an sfile.
@@ -465,16 +509,13 @@ class SFileFilter(object):
 
         # Each line represents one document
         for line in open_file:
-            tokens_in_doc = set()
             record_dict = self.formatter.sstr_to_dict(line)
             for token, value in record_dict['feature_values'].iteritems():
-                token2hash[token] = self.hash_fun(token)
-                tokens_in_doc.add(token)
+                hash_value = self.hash_fun(token)
+                token2hash[token] = hash_value
                 token_score[token] += value
-
-            for token in tokens_in_doc:
                 num_docs_in[token] += 1
-        
+
         if was_path:
             open_file.close()
 
@@ -497,6 +538,8 @@ class SFileFilter(object):
         # Make sure we don't have too many collisions
         vocab_size = len(all_tokens)
         num_collisions = vocab_size - len(hash_counts)
+        self._print(
+            "collisions, vocab_size = %d, %d" % (num_collisions, vocab_size))
         if num_collisions > vocab_size / 20.:
             msg = (
                 "num_collisions = %d.  vocab_size = %d.  Try using the "
@@ -552,21 +595,76 @@ class SFileFilter(object):
             token2hash[token] = new_hash
 
     def filter_sfile(self, infile, outfile):
-        pass
+        """
+        Change tokens to hash values (using self.token2hash) and remove
+        tokens not in self.token2hash.
+
+        Parameters
+        ----------
+        infile : file path or buffer
+        outfile : file path or buffer
+        """
+        assert self.sfile_loaded, "Must load an sfile before you can filter"
+
+        open_infile, infile_was_path = common.openfile_wrap(infile, 'r')
+        open_outfile, outfile_was_path = common.openfile_wrap(outfile, 'w')
+
+        # Each line represents one document
+        for line in open_infile:
+            record_dict = self.formatter.sstr_to_dict(line)
+            record_dict['feature_values'] = {
+                self.token2hash[token]: value 
+                for token, value in record_dict['feature_values'].iteritems() 
+                if token in self.token2hash}
+            new_sstr = self.formatter.get_sstr(**record_dict)
+            open_outfile.write(new_sstr + '\n')
+
+        if infile_was_path:
+            open_infile.close()
+        if outfile_was_path:
+            open_outfile.close()
 
     def remove_extreme_tokens(self, num_below=5, frac_above=0.5):
+        frame = self.to_frame()
+        import pdb;         pdb.set_trace() ########## F7 Breakpoint ##########
         pass
 
-    def remove_tokens(self, token_list):
-        pass
+    def remove_tokens(self, tokens):
+        """
+        Remove tokens from appropriate attributes.  The removed tokens will
+        removed when calling self.filter_sfile.
+
+        Parameters
+        ----------
+        tokens : String or iterable over strings
+            E.g. a single token or list of tokens
+        """
+        if isinstance(tokens, str):
+            tokens = [tokens]
+
+        for tok in tokens:
+            hash_value = self.token2hash[tok]
+            self.hash2token.pop(hash_value)
+            self.token2hash.pop(tok)
+            self.token_score.pop(tok)
+            self.num_docs_in.pop(tok)
 
     def add_doc_id_filter(self, doc_id, enforce_exact=True):
         pass
 
+    def _print(self, msg):
+        if self.verbose:
+            print(msg)
 
-def collision_probability(self, vocab_size, bit_precision):
+    @property
+    def vocab_size(self):
+        return len(self.token2hash)
+
+
+def collision_probability(vocab_size, bit_precision):
     """
-    Approximate probability of collision (assuming perfect hashing)
+    Approximate probability of collision (assuming perfect hashing).  See
+    the Wikipedia article on "The birthday problem" for details.
 
     Parameters
     ----------
@@ -575,7 +673,9 @@ def collision_probability(self, vocab_size, bit_precision):
     bit_precision : Integer
         Number of bits in space we are hashing to
     """
-    return vocab_size**2 / 2.**(bit_precision + 1)
+    exponent = - vocab_size * (vocab_size - 1) / 2.**bit_precision
+    
+    return 1 - np.exp(exponent)
 
 
 class CollisionError(Exception):

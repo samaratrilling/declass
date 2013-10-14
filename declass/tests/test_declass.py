@@ -30,18 +30,21 @@ class TestVWFormatter(unittest.TestCase):
     """
     """
     def setUp(self):
-        self.Formatter = text_processors.VWFormatter
+        self.formatter = text_processors.VWFormatter()
 
     def test_format_01(self):
-        rec_name = 'myname'
-        tokens = OrderedDict([('hello', 1), ('dude', 3)])
-        result = self.Formatter().write_str(tokens, rec_name=rec_name)
-        benchmark = "'%s | hello:1 dude:3" % rec_name
+        doc_id = 'myname'
+        feature_values = OrderedDict([('hello', 1), ('dude', 3)])
+        importance = 1
+        result = self.formatter.get_sstr(
+            feature_values=feature_values, doc_id=doc_id,
+            importance=importance)
+        benchmark = "'%s | hello:1 dude:3" % doc_id
         self.assertEqual(result, benchmark)
 
     def test_write_dict_01(self):
         record_str = "1 | hello:1 bye:2"
-        result = self.Formatter().write_dict(record_str)
+        result = self.formatter.write_dict(record_str)
         benchmark = {'hello': 1.0, 'bye': 2.0}
         self.assertEqual(result, benchmark)
 
@@ -101,7 +104,10 @@ class TestSFileFilter(unittest.TestCase):
         self.outfile = StringIO()
         formatter = text_processors.VWFormatter()
         self.sfile_filter = text_processors.SFileFilter(formatter)
-        self.sfile_1 = StringIO(
+    
+    @property
+    def sfile_1(self):
+        return StringIO(
             " 1 doc1| word1:1 word2:2\n"
             " 1 doc2| word1:1.1 word3:2")
 
@@ -120,12 +126,14 @@ class TestSFileFilter(unittest.TestCase):
         self.assertEqual(hash2token, benchmark)
 
     def test_load_sfile_rev_2(self):
+        # TODO This test is dependent on the result of calling 'hash', which
+        # is system dependent!
         # One collision, both '0' and '100' map to 0
         token2hash = {str(i): i for i in range(50)}
         token2hash['100'] = 0
         hash2token = self.sfile_filter._load_sfile_rev(token2hash, seed=1976)
         benchmark = {i: str(i) for i in range(50)}
-        benchmark[223414] = '0'
+        benchmark[3660426013] = '0'
         benchmark[0] = '100'
         self.assertEqual(hash2token, benchmark)
 
@@ -141,6 +149,34 @@ class TestSFileFilter(unittest.TestCase):
         # Check that the dicts are inverses of each other
         token2hash_rev = {v: k for k, v in token2hash.iteritems()}
         self.assertEqual(token2hash_rev, hash2token)
+
+    def check_keys(self, sfile_filter, benchmark):
+        all_keys = [
+            sfile_filter.token2hash.keys(), sfile_filter.token_score.keys(),
+            sfile_filter.num_docs_in.keys()]
+
+        for keys in all_keys:
+            self.assertEqual(set(keys), set(benchmark))
+
+    def test_load_sfile_1(self):
+        self.sfile_filter.load_sfile(self.sfile_1)
+        self.check_keys(self.sfile_filter, ['word1', 'word2', 'word3'])
+
+    def test_remove_tokens(self):
+        self.sfile_filter.load_sfile(self.sfile_1)
+        self.sfile_filter.remove_tokens('word1')
+        self.check_keys(self.sfile_filter, ['word2', 'word3'])
+
+    def test_filter_sfile(self):
+        self.sfile_filter.load_sfile(self.sfile_1)
+        self.sfile_filter.remove_tokens('word1')
+        self.sfile_filter.filter_sfile(self.sfile_1, self.outfile)
+        result = self.outfile.getvalue()
+        hash_fun = self.sfile_filter.hash_fun
+        benchmark = (
+            " 1 doc1| %d:2\n"
+            " 1 doc2| %d:2\n" % (hash_fun('word2'), hash_fun('word3')))
+        self.assertEqual(result, benchmark)
 
     def tearDown(self):
         self.outfile.close()
