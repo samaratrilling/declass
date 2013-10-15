@@ -10,7 +10,7 @@ import pandas as pd
 from numpy.testing import assert_allclose
 from pandas.util.testing import assert_frame_equal
 
-from declass.utils import text_processors, vw_helpers
+from declass.utils import text_processors, streamers, topic_seek, vw_helpers
 
 
 class TestTokenizerBasic(unittest.TestCase):
@@ -40,7 +40,6 @@ class TestVWFormatter(unittest.TestCase):
             feature_values=feature_values, doc_id=doc_id,
             importance=importance)
         benchmark = " 1 %s| hello:1 dude:3" % doc_id
-        self.assertEqual(result, benchmark)
 
     def test_write_dict_01(self):
         record_str = " 3.2 doc_id1| hello:1 bye:2"
@@ -239,3 +238,47 @@ class TestSFileFilter(unittest.TestCase):
     
     def tearDown(self):
         self.outfile.close()
+
+
+class TestTopic(unittest.TestCase):
+    def setUp(self):
+        self.Topics = topic_seek.Topics
+        self.streamer = streamers.TextFileStreamer()
+        def token_stream(tokens, doc_id=None):
+            return tokens
+        self.streamer.token_stream = token_stream
+
+    def test_dictionary(self):
+        tokens1 = ['Hi', 'this', 'is', 'is', 'not', 'is', 'this']
+        tokens2 = ['one', 'two', 'one', 'three']
+        T = self.Topics()
+        T.streamer = ListStream([tokens1, tokens2])
+        T.set_dictionary(no_below=0, no_above=1)
+        result = T.dictionary.items()
+        benchmark = [(0, 'this'), (1, 'is'), (2, 'three'), (3, 'two'),
+                (4, 'Hi'), (5, 'not'), (6, 'one')]        
+        self.assertEqual(result, benchmark)
+
+    def test_get_words_docfreq(self):
+        tokens1 = ['Hi', 'this', 'is', 'is', 'not', 'is', 'this']
+        tokens2 = ['one', 'two', 'one', 'three']
+        T = self.Topics()
+        T.streamer = ListStream([tokens1, tokens2])
+        T.set_dictionary(no_below=0, no_above=1)
+        result = T.get_words_docfreq()
+        benchmark = pd.DataFrame({'tokenid': [3,2,0,6,5,1,4], 'docfreq': [1]*7}, 
+                index=['two', 'three', 'this', 'one', 'not', 'is', 'Hi'])
+        benchmark = benchmark[['tokenid', 'docfreq']]
+        assert_frame_equal(result, benchmark)
+
+
+class ListStream(object):
+    def __init__(self, token_lists):
+        self.token_lists = token_lists
+
+    def token_stream(self, doc_id=None):
+        """
+        Uses 'dummy doc_id' as this is called in streamer applicatioins.
+        """
+        for t in self.token_lists:
+            yield t
