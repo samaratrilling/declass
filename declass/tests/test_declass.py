@@ -105,7 +105,8 @@ class TestSFileFilter(unittest.TestCase):
     def setUp(self):
         self.outfile = StringIO()
         formatter = text_processors.VWFormatter()
-        self.sfile_filter = text_processors.SFileFilter(formatter)
+        self.sfile_filter = text_processors.SFileFilter(
+            formatter, bit_precision=20)
         self.hash_fun = self.sfile_filter._get_hash_fun()
     
     @property
@@ -130,14 +131,12 @@ class TestSFileFilter(unittest.TestCase):
         self.assertEqual(hash2token, benchmark)
 
     def test_load_sfile_rev_2(self):
-        # TODO This test is dependent on the result of calling 'hash', which
-        # is system dependent!
         # One collision, both '0' and '100' map to 0
         token2hash = {str(i): i for i in range(50)}
         token2hash['100'] = 0
         hash2token = self.sfile_filter._load_sfile_rev(token2hash, seed=1976)
         benchmark = {i: str(i) for i in range(50)}
-        benchmark[3660426013] = '0'
+        benchmark[893658] = '0'
         benchmark[0] = '100'
         self.assertEqual(hash2token, benchmark)
 

@@ -14,7 +14,7 @@ from . import filefilter, nlp, common
 from common import lazyprop, smart_open, SaveLoad
 
 
-class BaseTokenizer(object):
+class BaseTokenizer(SaveLoad):
     """
     Base class, don't use directly.
     """
