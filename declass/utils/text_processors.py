@@ -11,7 +11,7 @@ import numpy as np
 import pandas as pd
 
 from . import filefilter, nlp, common
-from common import lazyprop, smart_open
+from common import lazyprop, smart_open, SaveLoad
 
 
 class BaseTokenizer(object):
@@ -425,7 +425,7 @@ class SVMLightFormatter(SparseFormatter):
         return {'target': float(preamble)}
 
 
-class SFileFilter(object):
+class SFileFilter(SaveLoad):
     """
     Filters results stored in sfiles (sparsely formattted bag-of-words files).
     """
@@ -722,28 +722,6 @@ class SFileFilter(object):
     def vocab_size(self):
         return len(self.token2hash)
 
-    def save(self, savefile):
-        """
-        Pickle self to outfile.
-
-        Parameters
-        ----------
-        savefile : filepath or buffer
-        """
-        with smart_open(savefile, 'w') as f:
-            cPickle.dump(self, f)
-
-    @classmethod
-    def load(cls, loadfile):
-        """
-        Pickle SFileFilter from disk.
-
-        Parameters
-        ----------
-        loadfile : filepath or buffer
-        """
-        with smart_open(loadfile, 'rb') as f:
-            return cPickle.load(f)
 
 def collision_probability(vocab_size, bit_precision):
     """
