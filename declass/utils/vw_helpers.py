@@ -7,6 +7,7 @@ from collections import defaultdict
 import pandas as pd
 
 from declass.utils import common
+from common import smart_open
 
 
 def parse_varinfo(varinfo_file):
@@ -19,20 +20,16 @@ def parse_varinfo(varinfo_file):
     varinfo_file : Path or buffer
         The output of vw-varinfo
     """
-    open_file, was_path = common.openfile_wrap(varinfo_file, 'r')
+    with smart_open(varinfo_file) as open_file:
+        # For some reason, pandas is confused...so just split the lines
+        # Create a dict {item1: [...], item2: [...],...} for each item in the
+        # header
+        header = open_file.next().split()
+        rows = {col_name: [] for col_name in header}
+        for line in open_file:
+            for i, item in enumerate(line.split()):
+                rows[header[i]].append(item)
 
-    # For some reason, pandas is confused...so just split the lines
-    # Create a dict {item1: [...], item2: [...],...} for each item in the
-    # header
-    header = open_file.next().split()
-    rows = {col_name: [] for col_name in header}
-    for line in open_file:
-        for i, item in enumerate(line.split()):
-            rows[header[i]].append(item)
-
-    if was_path:
-        open_file.close()
-    
     # Create a data frame
     varinfo = pd.DataFrame(rows)
     # Format columns correctly
@@ -77,30 +74,26 @@ def parse_lda_topics(topics_file, num_topics, normalize=True):
     topics['hash_val'] = []
     # The topics file contains a bunch of informational printout stuff at
     # the top.  Figure out what line this ends on
-    open_file, was_path = common.openfile_wrap(topics_file, 'r')
-
-    # Once we detect that we're in the valid rows, there better not be
-    # any exceptions!
-    in_valid_rows = False
-    for line in open_file:
-        try:
-            # If this row raises an exception, then it isn't a valid row
-            # Sometimes trailing space...that's the reason for String.split()
-            # rather than csv.reader or a direct pandas read.
-            split_line = line.split()
-            hash_val = int(split_line[0])
-            topic_weights = [float(item) for item in split_line[1:]]
-            assert len(topic_weights) == num_topics
-            for i, weight in enumerate(topic_weights):
-                topics['topic_%d' % i].append(weight)
-            topics['hash_val'].append(hash_val)
-            in_valid_rows = True
-        except (ValueError, IndexError, AssertionError):
-            if in_valid_rows:
-                raise
-
-    if was_path:
-        open_file.close()
+    with smart_open(topics_file, 'r') as open_file:
+        # Once we detect that we're in the valid rows, there better not be
+        # any exceptions!
+        in_valid_rows = False
+        for line in open_file:
+            try:
+                # If this row raises an exception, then it isn't a valid row
+                # Sometimes trailing space...that's the reason for split()
+                # rather than csv.reader or a direct pandas read.
+                split_line = line.split()
+                hash_val = int(split_line[0])
+                topic_weights = [float(item) for item in split_line[1:]]
+                assert len(topic_weights) == num_topics
+                for i, weight in enumerate(topic_weights):
+                    topics['topic_%d' % i].append(weight)
+                topics['hash_val'].append(hash_val)
+                in_valid_rows = True
+            except (ValueError, IndexError, AssertionError):
+                if in_valid_rows:
+                    raise
 
     topics = pd.DataFrame(topics).set_index('hash_val')
     if normalize:
@@ -129,20 +122,16 @@ def find_start_line_lda_predictions(predictions_file, num_topics):
     formatted file to have, in the last column, a unique doc_id associated
     with the doc.
     """
-    open_file, was_path = common.openfile_wrap(predictions_file, 'r')
-
-    for line_num, line in enumerate(open_file):
-        split_line = line.split()
-        # Currently only deal with topics + a doc_id
-        assert len(split_line) == num_topics + 1
-        doc_id = split_line[-1]
-        if line_num == 0:
-            first_doc_id = doc_id
-        if doc_id == first_doc_id:
-            start_line = line_num
-
-    if was_path:
-        open_file.close()
+    with smart_open(predictions_file) as open_file:
+        for line_num, line in enumerate(open_file):
+            split_line = line.split()
+            # Currently only deal with topics + a doc_id
+            assert len(split_line) == num_topics + 1
+            doc_id = split_line[-1]
+            if line_num == 0:
+                first_doc_id = doc_id
+            if doc_id == first_doc_id:
+                start_line = line_num
 
     return start_line
 
@@ -169,20 +158,16 @@ def parse_lda_predictions(
     predictions = {'topic_%d' % i: [] for i in range(num_topics)}
     predictions['doc_id'] = []
 
-    open_file, was_path = common.openfile_wrap(predictions_file, 'r')
-
-    for line_num, line in enumerate(open_file):
-        if line_num < start_line:
-            continue
-        split_line = line.split()
-        for item_num, item in enumerate(split_line):
-            if item_num < num_topics:
-                predictions['topic_%d' % item_num].append(float(item))
-            else:
-                predictions['doc_id'].append(item)
-
-    if was_path:
-        open_file.close()
+    with smart_open(predictions_file) as open_file:
+        for line_num, line in enumerate(open_file):
+            if line_num < start_line:
+                continue
+            split_line = line.split()
+            for item_num, item in enumerate(split_line):
+                if item_num < num_topics:
+                    predictions['topic_%d' % item_num].append(float(item))
+                else:
+                    predictions['doc_id'].append(item)
 
     predictions = pd.DataFrame(predictions).set_index('doc_id')
     if normalize:

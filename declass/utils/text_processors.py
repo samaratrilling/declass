@@ -254,15 +254,11 @@ class SparseFormatter(object):
         token_iter : Iterator
             E.g. token_iter.next() gets the next line as a list of tokens.
         """
-        open_file, was_path = common.openfile_wrap(filepath_or_buffer, 'r')
-
-        for index, line in enumerate(open_file):
-            if index == limit:
-                raise StopIteration
-            yield self.sstr_to_token_list(line)
-
-        if was_path:
-            open_file.close()
+        with smart_open(filepath_or_buffer) as open_file:
+            for index, line in enumerate(open_file):
+                if index == limit:
+                    raise StopIteration
+                yield self.sstr_to_token_list(line)
 
 
 class VWFormatter(SparseFormatter):
@@ -506,20 +502,16 @@ class SFileFilter(object):
 
         hash_fun = self._get_hash_fun()
 
-        open_file, was_path = common.openfile_wrap(sfile, 'r')
-
-        # Each line represents one document
-        for line in open_file:
-            num_docs += 1
-            record_dict = self.formatter.sstr_to_dict(line)
-            for token, value in record_dict['feature_values'].iteritems():
-                hash_value = hash_fun(token)
-                token2hash[token] = hash_value
-                token_score[token] += value
-                doc_freq[token] += 1
-
-        if was_path:
-            open_file.close()
+        with smart_open(sfile) as open_file:
+            # Each line represents one document
+            for line in open_file:
+                num_docs += 1
+                record_dict = self.formatter.sstr_to_dict(line)
+                for token, value in record_dict['feature_values'].iteritems():
+                    hash_value = hash_fun(token)
+                    token2hash[token] = hash_value
+                    token_score[token] += value
+                    doc_freq[token] += 1
 
         return token2hash, token_score, doc_freq, num_docs
 
@@ -633,25 +625,18 @@ class SFileFilter(object):
         assert self.sfile_loaded, "Must load an sfile before you can filter"
         extra_filter = self._get_extra_filter(doc_id_list)
 
-        open_infile, infile_was_path = common.openfile_wrap(infile, 'r')
-        open_outfile, outfile_was_path = common.openfile_wrap(outfile, 'w')
-
-        # Each line represents one document
-        for line in open_infile:
-            record_dict = self.formatter.sstr_to_dict(line)
-            if extra_filter(record_dict):
-                record_dict['feature_values'] = {
-                    self.token2hash[token]: value 
-                    for token, value
-                    in record_dict['feature_values'].iteritems() 
-                    if token in self.token2hash}
-                new_sstr = self.formatter.get_sstr(**record_dict)
-                open_outfile.write(new_sstr + '\n')
-
-        if infile_was_path:
-            open_infile.close()
-        if outfile_was_path:
-            open_outfile.close()
+        with smart_open(infile) as f, smart_open(outfile, 'w') as g:
+            # Each line represents one document
+            for line in f:
+                record_dict = self.formatter.sstr_to_dict(line)
+                if extra_filter(record_dict):
+                    record_dict['feature_values'] = {
+                        self.token2hash[token]: value 
+                        for token, value
+                        in record_dict['feature_values'].iteritems() 
+                        if token in self.token2hash}
+                    new_sstr = self.formatter.get_sstr(**record_dict)
+                    g.write(new_sstr + '\n')
 
         self._done_check(enforce_all_doc_id)
 
@@ -758,9 +743,7 @@ class SFileFilter(object):
         loadfile : filepath or buffer
         """
         with smart_open(loadfile, 'rb') as f:
-            new_sfile_filter = cPickle.load(f)
-
-        return new_sfile_filter
+            return cPickle.load(f)
 
 def collision_probability(vocab_size, bit_precision):
     """

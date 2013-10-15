@@ -218,6 +218,8 @@ class smart_open(object):
     """
     def __init__(self, filename, *args):
         """
+        The exact same call structure as the built-in function 'open'
+
         Parmeters
         ---------
         filename : filepath, buffer, or StringIO
