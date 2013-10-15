@@ -3,10 +3,11 @@ Wrappers to help with Vowpal Wabbit (VW).
 """
 import csv
 from collections import defaultdict
+import sys
 
 import pandas as pd
 
-from declass.utils import common
+from declass.utils import common, text_processors
 from common import smart_open
 
 
@@ -190,27 +191,54 @@ class LDAResults(object):
     http://tech.groups.yahoo.com/group/vowpal_wabbit/
     """
     def __init__(
-        self, varinfo_file, topics_file, predictions_file, num_topics):
+        self, topics_file, predictions_file, num_topics, sfile_filter):
         """
         Parameters
         ----------
-        varinfo_file : Path or buffer
-            The output of vw-varinfo
         topics_file : filepath or buffer
             The --readable_model output of a VW lda run
         predictions_file : filepath or buffer
             The -p output of a VW lda run
         num_topics : Integer
             The number of topics in every valid row
+        sfile_filter : filepath, buffer, or loaded text_processors.SFileFilter
         """
         self.num_topics = num_topics
 
-        self.varinfo = parse_varinfo(varinfo_file)
 
-        self.topics = parse_lda_topics(topics_file, num_topics)
-        self.topics = self.topics.reindex(index=self.varinfo.index)
+        if isinstance(sfile_filter, text_processors.SFileFilter):
+            self.sfile_filter = sfile_filter
+        else:
+            self.sfile_filter = text_processors.SFileFilter.load(sfile_filter)
+
+        topics = parse_lda_topics(topics_file, num_topics)
+        topics = topics.reindex(index=self.sfile_filter.hash2token.keys())
+        topics = topics.rename(index=self.sfile_filter.hash2token)
+        self.topics = topics
 
         start_line = find_start_line_lda_predictions(
             predictions_file, num_topics)
         self.predictions = parse_lda_predictions(
             predictions_file, num_topics, start_line)
+
+    def print_topics(self, topn=5, outfile=sys.stdout):
+        """
+        Print ordered words in topics to stdout or a file.
+
+        Parameters
+        ----------
+        topn : Integer
+            Print the topn words (ordered by P[w|topic]) in each topic.
+        """
+        header = " Printing top %d tokens in every topic" % topn
+        outstr = "=" * 10 + header + "=" * 10
+
+        for topic_name in self.topics.columns:
+            outstr += '\n' + "-" * 30 + '\n%s' % topic_name
+            sorted_topic = self.topics[topic_name].order(ascending=False)
+            outstr += "\n" + sorted_topic.head(topn).to_string() 
+        outstr += '\n'
+        
+        outfile.write(outstr)
+
+

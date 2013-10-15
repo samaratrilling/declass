@@ -429,7 +429,7 @@ class SFileFilter(SaveLoad):
     """
     Filters results stored in sfiles (sparsely formattted bag-of-words files).
     """
-    def __init__(self, formatter, bit_precision=32, verbose=False):
+    def __init__(self, formatter, bit_precision=20, verbose=False):
         """
         Parameters
         ----------
@@ -742,6 +742,3 @@ def collision_probability(vocab_size, bit_precision):
 
 class CollisionError(Exception):
     pass
-
-# TODO : Make this have a "dict" attribute that has many dict-like methods
-# TODO : Should this object even hash....why not just add in sequence?  No need to compute a hash (other than implicityly while checking if item in self.dict).  The most common use-case is bulk adding of files...
