@@ -480,7 +480,7 @@ class SFileFilter(SaveLoad):
 
     def load_sfile(self, sfile):
         """
-        Load an sfile, building self.token2hash and self.hash2token.
+        Load an sfile, building self.token2id and self.id2token.
 
         Parameters
         ----------
@@ -490,11 +490,11 @@ class SFileFilter(SaveLoad):
         # TODO Allow loading of more than one sfile
         assert not self.sfile_loaded
 
-        # Build token2hash
-        token2hash, token_score, doc_freq, num_docs = (
+        # Build token2id
+        token2id, token_score, doc_freq, num_docs = (
             self._load_sfile_fwd(sfile))
 
-        self.token2hash = token2hash
+        self.token2id = token2id
         self.token_score = token_score
         self.doc_freq = doc_freq
         self.num_docs = num_docs
@@ -506,7 +506,7 @@ class SFileFilter(SaveLoad):
         """
         Builds the "forward" objects involved in loading an sfile.
         """
-        token2hash = {}
+        token2id = {}
         token_score = defaultdict(float)
         doc_freq = defaultdict(int)
         num_docs = 0
@@ -520,37 +520,41 @@ class SFileFilter(SaveLoad):
                 record_dict = self.formatter.sstr_to_dict(line)
                 for token, value in record_dict['feature_values'].iteritems():
                     hash_value = hash_fun(token)
-                    token2hash[token] = hash_value
+                    token2id[token] = hash_value
                     token_score[token] += value
                     doc_freq[token] += 1
 
-        return token2hash, token_score, doc_freq, num_docs
+        return token2id, token_score, doc_freq, num_docs
 
     def resolve_collisions(self, seed=None):
         """
-        Resolves collisions in self.token2hash and sets self.hash2token
+        Resolves collisions in self.token2id and sets self.id2token.
+        Works by finding a new id value for every collision, making the map
+        token2id injective.
         """
+        # TODO Add support for resolving of collisions in the case that we
+        # cannot make token2id injective.
         # TODO Make these three methods logical in their layout again
-        self.hash2token = self._load_sfile_rev(self.token2hash, seed=seed)
+        self.id2token = self._load_sfile_rev(self.token2id, seed=seed)
         self.collisions_resolved = True
 
-    def _load_sfile_rev(self, token2hash, seed=None):
+    def _load_sfile_rev(self, token2id, seed=None):
         """
         Builds the "reverse" objects involved in loading an sfile.
 
         Returns
         -------
-        hash2token : Dict
+        id2token : Dict
         """
-        hash2token = {}
+        id2token = {}
 
-        all_tokens = token2hash.keys()
-        all_hashes = token2hash.values()
-        hash_counts = Counter(all_hashes)
+        all_tokens = token2id.keys()
+        all_ides = token2id.values()
+        id_counts = Counter(all_ides)
         
         # Make sure we don't have too many collisions
-        vocab_size = len(token2hash)
-        num_collisions = vocab_size - len(hash_counts)
+        vocab_size = len(token2id)
+        num_collisions = vocab_size - len(id_counts)
         self._print(
             "collisions, vocab_size = %d, %d" % (num_collisions, vocab_size))
         if num_collisions > vocab_size / 2.:
@@ -562,57 +566,57 @@ class SFileFilter(SaveLoad):
             raise CollisionError(msg)
 
         collisions = set()
-        for token, hash_value in zip(all_tokens, all_hashes):
-            if hash_counts[hash_value] == 1:
-                hash2token[hash_value] = token
+        for token, id_value in zip(all_tokens, all_ides):
+            if id_counts[id_value] == 1:
+                id2token[id_value] = token
             else:
                 collisions.add(token)
 
         self._resolve_collisions_core(
-            collisions, hash_counts, token2hash, hash2token, seed=seed)
+            collisions, id_counts, token2id, id2token, seed=seed)
 
-        return hash2token
+        return id2token
 
     def _resolve_collisions_core(
-        self, collisions, hash_counts, token2hash, hash2token, seed=None):
+        self, collisions, id_counts, token2id, id2token, seed=None):
         """
-        Function used to resolve collisions.  Finds a hash value not already
+        Function used to resolve collisions.  Finds a id value not already
         used using a "random probe" method.
 
         Parameters
         ----------
         collisions : Set of tokens
-        hash_counts : Dict
-            keys = hash_values, values = number of times each hash_value
-            appears in token2hash
-        token2hash : Dict
-        hash2token : Dict
+        id_counts : Dict
+            keys = id_values, values = number of times each id_value
+            appears in token2id
+        token2id : Dict
+        id2token : Dict
         """
         # Seed for testing
         random.seed(seed)
 
         for token in collisions:
-            old_hash = token2hash[token]
-            new_hash = old_hash
-            # If hash_counts[old_hash] > 1, then the collision still must be
-            # resolved.  In that case, change new_hash and update hash_counts
-            if hash_counts[old_hash] > 1:
-                # hash_counts is the only dict (at this time) holding every
-                # hash you have ever seen
-                while new_hash in hash_counts:
-                    new_hash = random.randint(0, self.precision - 1)
-                    new_hash = new_hash % self.precision
-                hash_counts[old_hash] -= 1
-                hash_counts[new_hash] = 1
+            old_id = token2id[token]
+            new_id = old_id
+            # If id_counts[old_id] > 1, then the collision still must be
+            # resolved.  In that case, change new_id and update id_counts
+            if id_counts[old_id] > 1:
+                # id_counts is the only dict (at this time) holding every
+                # id you have ever seen
+                while new_id in id_counts:
+                    new_id = random.randint(0, self.precision - 1)
+                    new_id = new_id % self.precision
+                id_counts[old_id] -= 1
+                id_counts[new_id] = 1
             # Update dictionaries
-            hash2token[new_hash] = token
-            token2hash[token] = new_hash
+            id2token[new_id] = token
+            token2id[token] = new_id
 
     def filter_sfile(
         self, infile, outfile, doc_id_list=None, enforce_all_doc_id=True):
         """
-        Change tokens to hash values (using self.token2hash) and remove
-        tokens not in self.token2hash.
+        Change tokens to id values (using self.token2id) and remove
+        tokens not in self.token2id.
 
         Parameters
         ----------
@@ -636,10 +640,10 @@ class SFileFilter(SaveLoad):
                 record_dict = self.formatter.sstr_to_dict(line)
                 if extra_filter(record_dict):
                     record_dict['feature_values'] = {
-                        self.token2hash[token]: value 
+                        self.token2id[token]: value 
                         for token, value
                         in record_dict['feature_values'].iteritems() 
-                        if token in self.token2hash}
+                        if token in self.token2id}
                     new_sstr = self.formatter.get_sstr(**record_dict)
                     g.write(new_sstr + '\n')
 
@@ -713,12 +717,12 @@ class SFileFilter(SaveLoad):
             tokens = [tokens]
 
         for tok in tokens:
-            hash_value = self.token2hash[tok]
-            self.token2hash.pop(tok)
+            id_value = self.token2id[tok]
+            self.token2id.pop(tok)
             self.token_score.pop(tok)
             self.doc_freq.pop(tok)
-            if hasattr(self, 'hash2token'):
-                self.hash2token.pop(hash_value)
+            if hasattr(self, 'id2token'):
+                self.id2token.pop(id_value)
 
     def _print(self, msg):
         if self.verbose:
@@ -728,23 +732,23 @@ class SFileFilter(SaveLoad):
         """
         Return a dataframe representation of self.
         """
-        token2hash = self.token2hash
+        token2id = self.token2id
         token_score = self.token_score
         doc_freq = self.doc_freq
 
-        assert token2hash.keys() == token_score.keys() == doc_freq.keys()
+        assert token2id.keys() == token_score.keys() == doc_freq.keys()
         frame = pd.DataFrame(
-            {'hash': token2hash.values(),
+            {'id': token2id.values(),
              'token_score': token_score.values(),
              'doc_freq': doc_freq.values()},
-            index=token2hash.keys())
+            index=token2id.keys())
         frame.index.name = 'token'
 
         return frame
 
     @property
     def vocab_size(self):
-        return len(self.token2hash)
+        return len(self.token2id)
 
 
 def collision_probability(vocab_size, bit_precision):

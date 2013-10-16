@@ -115,46 +115,46 @@ class TestSFileFilter(unittest.TestCase):
             " 1 doc2| word1:1.1 word3:2")
 
     def test_load_sfile_fwd_1(self):
-        token2hash, token_score, doc_freq, num_docs = (
+        token2id, token_score, doc_freq, num_docs = (
             self.sfile_filter._load_sfile_fwd(self.sfile_1))
         self.assertEqual(num_docs, 2)
-        self.assertEqual(len(token2hash), 3)
+        self.assertEqual(len(token2id), 3)
         self.assertEqual(token_score, {'word1': 2.1, 'word2': 2, 'word3': 2})
         self.assertEqual(doc_freq, {'word1': 2, 'word2': 1, 'word3': 1})
 
     def test_load_sfile_rev_1(self):
         # No collisions
-        token2hash = {'one': 1, 'two': 2}
-        hash2token = self.sfile_filter._load_sfile_rev(token2hash)
+        token2id = {'one': 1, 'two': 2}
+        id2token = self.sfile_filter._load_sfile_rev(token2id)
         benchmark = {1: 'one', 2: 'two'}
-        self.assertEqual(hash2token, benchmark)
+        self.assertEqual(id2token, benchmark)
 
     def test_load_sfile_rev_2(self):
         # One collision, both '0' and '100' map to 0
-        token2hash = {str(i): i for i in range(50)}
-        token2hash['100'] = 0
-        hash2token = self.sfile_filter._load_sfile_rev(token2hash, seed=1976)
+        token2id = {str(i): i for i in range(50)}
+        token2id['100'] = 0
+        id2token = self.sfile_filter._load_sfile_rev(token2id, seed=1976)
         benchmark = {i: str(i) for i in range(50)}
         benchmark[893658] = '0'
         benchmark[0] = '100'
-        self.assertEqual(hash2token, benchmark)
+        self.assertEqual(id2token, benchmark)
 
     def test_resolve_collisions(self):
-        token2hash = {str(i): random.randint(0, 5) for i in range(10)}
-        hash_counts = Counter(token2hash.values())
-        hash2token = {
-            v: k for k, v in token2hash.iteritems() if hash_counts[v] == 1}
+        token2id = {str(i): random.randint(0, 5) for i in range(10)}
+        id_counts = Counter(token2id.values())
+        id2token = {
+            v: k for k, v in token2id.iteritems() if id_counts[v] == 1}
         collisions = set(
-            k for k, v in token2hash.iteritems() if hash_counts[v] > 1)
+            k for k, v in token2id.iteritems() if id_counts[v] > 1)
         self.sfile_filter._resolve_collisions_core(
-            collisions, hash_counts, token2hash, hash2token)
+            collisions, id_counts, token2id, id2token)
         # Check that the dicts are inverses of each other
-        token2hash_rev = {v: k for k, v in token2hash.iteritems()}
-        self.assertEqual(token2hash_rev, hash2token)
+        token2id_rev = {v: k for k, v in token2id.iteritems()}
+        self.assertEqual(token2id_rev, id2token)
 
     def check_keys(self, sfile_filter, benchmark_key_list):
         all_keys = [
-            sfile_filter.token2hash.keys(), sfile_filter.token_score.keys(),
+            sfile_filter.token2id.keys(), sfile_filter.token_score.keys(),
             sfile_filter.doc_freq.keys()]
 
         for keys in all_keys:

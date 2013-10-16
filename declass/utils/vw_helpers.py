@@ -211,8 +211,8 @@ class LDAResults(object):
             self.sfile_filter = text_processors.SFileFilter.load(sfile_filter)
 
         topics = parse_lda_topics(topics_file, num_topics)
-        topics = topics.reindex(index=self.sfile_filter.hash2token.keys())
-        topics = topics.rename(index=self.sfile_filter.hash2token)
+        topics = topics.reindex(index=self.sfile_filter.id2token.keys())
+        topics = topics.rename(index=self.sfile_filter.id2token)
         self.topics = topics
 
         start_line = find_start_line_lda_predictions(
