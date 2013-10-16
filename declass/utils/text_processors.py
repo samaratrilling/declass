@@ -443,7 +443,7 @@ class SFileFilter(SaveLoad):
     """
     Filters results stored in sfiles (sparsely formattted bag-of-words files).
     """
-    def __init__(self, formatter, bit_precision=24, verbose=False):
+    def __init__(self, formatter, bit_precision=16, verbose=False):
         """
         Parameters
         ----------
@@ -494,16 +494,13 @@ class SFileFilter(SaveLoad):
         token2hash, token_score, doc_freq, num_docs = (
             self._load_sfile_fwd(sfile))
 
-        # Build hash2token
-        hash2token = self._load_sfile_rev(token2hash)
-
         self.token2hash = token2hash
         self.token_score = token_score
         self.doc_freq = doc_freq
-        self.hash2token = hash2token
         self.num_docs = num_docs
 
         self.sfile_loaded = True
+        self.collisions_resolved = False
 
     def _load_sfile_fwd(self, sfile):
         """
@@ -529,6 +526,14 @@ class SFileFilter(SaveLoad):
 
         return token2hash, token_score, doc_freq, num_docs
 
+    def resolve_collisions(self, seed=None):
+        """
+        Resolves collisions in self.token2hash and sets self.hash2token
+        """
+        # TODO Make these three methods logical in their layout again
+        self.hash2token = self._load_sfile_rev(self.token2hash, seed=seed)
+        self.collisions_resolved = True
+
     def _load_sfile_rev(self, token2hash, seed=None):
         """
         Builds the "reverse" objects involved in loading an sfile.
@@ -544,11 +549,11 @@ class SFileFilter(SaveLoad):
         hash_counts = Counter(all_hashes)
         
         # Make sure we don't have too many collisions
-        vocab_size = len(all_tokens)
+        vocab_size = len(token2hash)
         num_collisions = vocab_size - len(hash_counts)
         self._print(
             "collisions, vocab_size = %d, %d" % (num_collisions, vocab_size))
-        if num_collisions > vocab_size / 10.:
+        if num_collisions > vocab_size / 2.:
             msg = (
                 "Too many collisions to be efficient: "
                 "num_collisions = %d.  vocab_size = %d.  Try using the "
@@ -563,30 +568,12 @@ class SFileFilter(SaveLoad):
             else:
                 collisions.add(token)
 
-        self._resolve_collisions(
+        self._resolve_collisions_core(
             collisions, hash_counts, token2hash, hash2token, seed=seed)
 
         return hash2token
 
-    def to_frame(self):
-        """
-        Return a dataframe representation of self.
-        """
-        token2hash = self.token2hash
-        token_score = self.token_score
-        doc_freq = self.doc_freq
-
-        assert token2hash.keys() == token_score.keys() == doc_freq.keys()
-        frame = pd.DataFrame(
-            {'hash': token2hash.values(),
-             'token_score': token_score.values(),
-             'doc_freq': doc_freq.values()},
-            index=token2hash.keys())
-        frame.index.name = 'token'
-
-        return frame
-
-    def _resolve_collisions(
+    def _resolve_collisions_core(
         self, collisions, hash_counts, token2hash, hash2token, seed=None):
         """
         Function used to resolve collisions.  Finds a hash value not already
@@ -638,6 +625,9 @@ class SFileFilter(SaveLoad):
             in doc_id_list are seen.
         """
         assert self.sfile_loaded, "Must load an sfile before you can filter"
+        assert self.collisions_resolved, (
+            "Must resolve collisions before you can filter")
+
         extra_filter = self._get_extra_filter(doc_id_list)
 
         with smart_open(infile) as f, smart_open(outfile, 'w') as g:
@@ -724,14 +714,33 @@ class SFileFilter(SaveLoad):
 
         for tok in tokens:
             hash_value = self.token2hash[tok]
-            self.hash2token.pop(hash_value)
             self.token2hash.pop(tok)
             self.token_score.pop(tok)
             self.doc_freq.pop(tok)
+            if hasattr(self, 'hash2token'):
+                self.hash2token.pop(hash_value)
 
     def _print(self, msg):
         if self.verbose:
             print(msg)
+
+    def to_frame(self):
+        """
+        Return a dataframe representation of self.
+        """
+        token2hash = self.token2hash
+        token_score = self.token_score
+        doc_freq = self.doc_freq
+
+        assert token2hash.keys() == token_score.keys() == doc_freq.keys()
+        frame = pd.DataFrame(
+            {'hash': token2hash.values(),
+             'token_score': token_score.values(),
+             'doc_freq': doc_freq.values()},
+            index=token2hash.keys())
+        frame.index.name = 'token'
+
+        return frame
 
     @property
     def vocab_size(self):

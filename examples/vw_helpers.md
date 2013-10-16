@@ -38,11 +38,11 @@ Quick test of VW on this `sfile`
 --------------------------------
 
     rm -f *cache
-    vw --lda 5 --cache_file doc_tokens.cache --passes 10 -p prediction.dat --readable_model topics.dat --bit_precision 24 doc_tokens.vw
+    vw --lda 5 --cache_file doc_tokens.cache --passes 10 -p prediction.dat --readable_model topics.dat --bit_precision 16 doc_tokens.vw
 
 * The call `vw --lda 5` means run LDA and use 5 topics.
 * The `--cache_file` option means "during the first pass, convert the input to a binary 'cached' format and use that for subsequent results.  The `rm -f *cache` is important since if you don't erase the cache file, `VW` will re-use the old one, even if you specify a new input file!
-* The `--bit_precision 24` option means: "Use 24 bits of precision" when [hashing][hashing] tokens.
+* The `--bit_precision 16` option means: "Use 16 bits of precision" when [hashing][hashing] tokens.  This will cause many collisions but won't effect the results much at all.  Vowpal Wabbit is *very* sensitive to bit precision!  If you make it bigger, you need many more passes to get decent results.
 * See [this slideshow][vwlda] about LDA in VW.
 
 This produces two files:
@@ -63,9 +63,12 @@ sfile_filter = SFileFilter(text_processors.VWFormatter(), verbose=True)
 sfile_filter.load_sfile('doc_tokens.vw')
 
 sfile_filter.remove_extreme_tokens(doc_freq_min=5, doc_fraction_max=0.5)
+sfile_filter.resolve_collisions()
 sfile_filter.save('sfile_filter_file.pkl')
 ```
-The call `.remove_extreme_tokens` removes low/high frequency tokens from our filter's internal dictionaries.  It's just like those words were never present in the original text.
+
+* `.remove_extreme_tokens` removes low/high frequency tokens from our filter's internal dictionaries.  It's just like those words were never present in the original text.
+* `.resolve_collisions()` changes the hash values for tokens that collide.  If you have too many collisions an exception will be raised.  Note that if we didn't remove extreme tokens before resolving collisions, then we would have many words in our vocab, and there is a good chance the collisions would not be able to be resolved!
 
 ### Step 2a:  Run VW on filtered output
 First save a "filtered" version of `doc_tokens.vw`.
@@ -79,9 +82,9 @@ Now run `vw`.
 
 ```
 rm -f *cache
-vw --lda 5 --cache_file ddrs.cache --passes 10 -p prediction.dat --readable_model topics.dat --bit_precision 24 doc_tokens_filtered.vw
+vw --lda 5 --cache_file ddrs.cache --passes 10 -p prediction.dat --readable_model topics.dat --bit_precision 16 doc_tokens_filtered.vw
 ```
-It is very important that the bit precision for vw, set with `--bit_precision 24` matches the bit precision used for your `SFileFilter` (default = 24).  If you don't then the hash values used by `vw` will not match the ones stored in the filter.
+It is very important that the bit precision for vw, set with `--bit_precision 16` matches the bit precision used for your `SFileFilter` (default = 16).  If you don't then the hash values used by `vw` will not match the ones stored in the filter.
 
 
 ### Step 2b:  Filter "on the fly" using a saved `sfile_filter`
@@ -90,7 +93,7 @@ The workflow in step 2a requires making the intermediate file `doc_tokens_filter
 ```
 rm -f *cache
 python $DECLASS/cmd/filter_sfile.py -s sfile_filter_file.pkl  doc_tokens.vw  \
-    | vw --lda 5 --cache_file ddrs.cache --passes 10 -p prediction.dat --readable_model topics.dat --bit_precision 24
+    | vw --lda 5 --cache_file ddrs.cache --passes 10 -p prediction.dat --readable_model topics.dat --bit_precision 16
 ```
 The python function `filter_sfile.py` takes in `ddrs.vw` and streams a filtered sfile to stdout.  The `|` connects `vw` to this stream.  Notice we no longer specify an input file to `vw` (previously we passed it a `doc_tokens_filtered.vw` positional argument).
 
@@ -99,6 +102,8 @@ The python function `filter_sfile.py` takes in `ddrs.vw` and streams a filtered 
 ```python
 num_topics = 5
 lda = LDAResults('topics.dat', 'prediction.dat', num_topics, 'sfile_filter_file.pkl')
+lda.topics.head()
+lda.predictions.head()
 lda.print_topics()
 ```
 

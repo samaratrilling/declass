@@ -146,7 +146,7 @@ class TestSFileFilter(unittest.TestCase):
             v: k for k, v in token2hash.iteritems() if hash_counts[v] == 1}
         collisions = set(
             k for k, v in token2hash.iteritems() if hash_counts[v] > 1)
-        self.sfile_filter._resolve_collisions(
+        self.sfile_filter._resolve_collisions_core(
             collisions, hash_counts, token2hash, hash2token)
         # Check that the dicts are inverses of each other
         token2hash_rev = {v: k for k, v in token2hash.iteritems()}
@@ -192,6 +192,7 @@ class TestSFileFilter(unittest.TestCase):
     def test_filter_sfile_1(self):
         self.sfile_filter.load_sfile(self.sfile_1)
         self.sfile_filter.remove_tokens('word1')
+        self.sfile_filter.resolve_collisions()
         self.sfile_filter.filter_sfile(self.sfile_1, self.outfile)
         result = self.outfile.getvalue()
         benchmark = (
@@ -202,6 +203,7 @@ class TestSFileFilter(unittest.TestCase):
 
     def test_filter_sfile_2(self):
         self.sfile_filter.load_sfile(self.sfile_1)
+        self.sfile_filter.resolve_collisions()
         self.sfile_filter.filter_sfile(
             self.sfile_1, self.outfile, doc_id_list=['doc1'])
         result = self.outfile.getvalue()
@@ -213,6 +215,7 @@ class TestSFileFilter(unittest.TestCase):
     def test_filter_sfile_3(self):
         self.sfile_filter.load_sfile(self.sfile_1)
         self.sfile_filter.remove_tokens('word1')
+        self.sfile_filter.resolve_collisions()
         self.sfile_filter.filter_sfile(
             self.sfile_1, self.outfile, doc_id_list=['doc1'])
         result = self.outfile.getvalue()
@@ -221,6 +224,7 @@ class TestSFileFilter(unittest.TestCase):
 
     def test_filter_sfile_4(self):
         self.sfile_filter.load_sfile(self.sfile_1)
+        self.sfile_filter.resolve_collisions()
         self.sfile_filter.filter_sfile(
             self.sfile_1, self.outfile, doc_id_list=['doc1', 'unseen'],
             enforce_all_doc_id=False)
@@ -232,6 +236,7 @@ class TestSFileFilter(unittest.TestCase):
 
     def test_filter_sfile_5(self):
         self.sfile_filter.load_sfile(self.sfile_1)
+        self.sfile_filter.resolve_collisions()
         with self.assertRaises(AssertionError) as cm:
             self.sfile_filter.filter_sfile(
                 self.sfile_1, self.outfile, doc_id_list=['doc1', 'unseen'])
