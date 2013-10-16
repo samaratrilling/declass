@@ -463,7 +463,7 @@ class SaveLoad(object):
             0 < 1 < 2 in terms of performance.  -1 means use highest available.
         """
         with smart_open(savefile, 'w') as f:
-            cPickle.dump(self, f)
+            cPickle.dump(self, f, protocol=protocol)
 
     @classmethod
     def load(cls, loadfile):

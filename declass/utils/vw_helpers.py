@@ -206,13 +206,13 @@ class LDAResults(object):
 
 
         if isinstance(sfile_filter, text_processors.SFileFilter):
-            self.sfile_filter = sfile_filter
+            self._sfile_filter = sfile_filter
         else:
-            self.sfile_filter = text_processors.SFileFilter.load(sfile_filter)
+            self._sfile_filter = text_processors.SFileFilter.load(sfile_filter)
 
         topics = parse_lda_topics(topics_file, num_topics)
-        topics = topics.reindex(index=self.sfile_filter.id2token.keys())
-        topics = topics.rename(index=self.sfile_filter.id2token)
+        topics = topics.reindex(index=self._sfile_filter.id2token.keys())
+        topics = topics.rename(index=self._sfile_filter.id2token)
         self.topics = topics
 
         start_line = find_start_line_lda_predictions(
@@ -235,8 +235,7 @@ class LDAResults(object):
         for topic_name in self.topics.columns:
             outstr += '\n' + "-" * 30 + '\n%s' % topic_name
             sorted_topic = self.topics[topic_name].order(ascending=False)
-            outstr += "\n" + sorted_topic.head(topn).to_string() 
-        outstr += '\n'
+            outstr += "\n" + sorted_topic.head(topn).to_string() + "\n"
         
         outfile.write(outstr)
 

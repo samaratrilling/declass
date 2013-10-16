@@ -21,18 +21,19 @@ Assume you have a `base_path` (directory), called `my_base_path`, under which yo
 
 
 #### To use a custom tokenizer with Method 1
-The default tokenizer removes stopwords and that's it.  You of course will want to create custom tokenizers.  A `Tokenizer` simply needs to be a subclass of `BaseTokenizer`.  In particular, it (only) needs to have a method, `.text_to_token_list()` that takes in a string (representing a single document) and spits out a list of strings (the *tokens*).  If you already have such a function, then you can create a tokenizer by doing:
+The default tokenizer removes stopwords, converts to lowercase, and that's it.  You of course will want to create custom tokenizers.  A `Tokenizer` simply needs to be a subclass of `BaseTokenizer`.  In particular, it (only) needs to have a method, `.text_to_token_list()` that takes in a string (representing a single document) and spits out a list of strings (the *tokens*).  If you already have such a function, then you can create a tokenizer by doing:
 
     my_tokenizer = MakeTokenizer(my_tokenizing_func)
 
 In any case, the steps are:
 
-* Create a `Tokenizer` and pickle it using `my_tokenizer.save(my_filename.pkl)`.  Note that an subclass of `BaseTokenizer` automatically has a `.save` method.
+* Create a `Tokenizer` and pickle it using `my_tokenizer.save(my_filename.pkl)`.  Note that any subclass of `BaseTokenizer` automatically inherits a `.save` method.
 * Pass this path as the `--tokenizer_pickle` option to `files_to_vw.py`
 * If you think this tokenizer is useful for everyone, then submit an issue requesting this be added to the standard tokenizers, then it can be called with the `--tokenizer_type` argument.
 
 ### Method 2: From a `TextFileStreamer`
 
+TODO: Add this
 
 Quick test of VW on this `sfile`
 --------------------------------
@@ -59,24 +60,25 @@ There are some issues with using the raw `prediction.dat` and `topics.dat` files
 ### Step 1:  Make an `SFileFilter`
 
 ```python
-sfile_filter = SFileFilter(text_processors.VWFormatter(), verbose=True)
-sfile_filter.load_sfile('doc_tokens.vw')
-
-sfile_filter.remove_extreme_tokens(doc_freq_min=5, doc_fraction_max=0.5)
-sfile_filter.resolve_collisions()
-sfile_filter.save('sfile_filter_file.pkl')
+sff = SFileFilter(text_processors.VWFormatter(), verbose=True)
+sff.load_sfile('doc_tokens.vw')
+df = sff.to_frame()
+df.head()
+sff.filter_extremes(doc_freq_min=5, doc_fraction_max=0.5)
+sff.save('sff_file.pkl')
 ```
 
-* `.remove_extreme_tokens` removes low/high frequency tokens from our filter's internal dictionaries.  It's just like those words were never present in the original text.
-* `.resolve_collisions()` changes the hash values for tokens that collide.  If you have too many collisions an exception will be raised.  Note that if we didn't remove extreme tokens before resolving collisions, then we would have many words in our vocab, and there is a good chance the collisions would not be able to be resolved!
+* `.to_frame()` returns a DataFrame representation that is useful for deciding which tokens to filter.
+* `.filter_extremes` removes low/high frequency tokens from our filter's internal dictionaries.  It's just like those words were never present in the original text.
+* `.save` first sets the inverse mapping, `self.id2token`, then saves to disk.  To set the inverse mappin, we first resolve collisions by changing the id values for tokens that collide.  Note that if we didn't filter extreme tokens before resolving collisions, then we would have many words in our vocab, and there is a good chance the collisions would not be able to be resolved!
 
 ### Step 2a:  Run VW on filtered output
 First save a "filtered" version of `doc_tokens.vw`.
 
 ```python
-sfile_filter.filter_sfile('doc_tokens.vw', 'doc_tokens_filtered.vw')
+sff.filter_sfile('doc_tokens.vw', 'doc_tokens_filtered.vw')
 ```
-Our filtered output, `doc_tokens_filtered.vw` has replaced words with the hash values that the `sfile_filter` chose.  This forces `vw` to use the hash values we chose.  Since we saved our filter with `.save`, we will have access to the `token2hash` mapping.  Also, since the `sfile_filter`resolves all collisions, we also have access to the inverse mapping `hash2token`.
+Our filtered output, `doc_tokens_filtered.vw` has replaced words with the id values that the `sff` chose.  This forces `vw` to use the values we chose (VW's hasher maps integers to integers, modulo `2^bit_precision`).  Since we saved our filter with `.save`, we will have access to both the `token2id` and `id2token` mappings.  Optionally we can filter based on `doc_id`.
 
 Now run `vw`.
 
@@ -84,27 +86,36 @@ Now run `vw`.
 rm -f *cache
 vw --lda 5 --cache_file ddrs.cache --passes 10 -p prediction.dat --readable_model topics.dat --bit_precision 16 doc_tokens_filtered.vw
 ```
-It is very important that the bit precision for vw, set with `--bit_precision 16` matches the bit precision used for your `SFileFilter` (default = 16).  If you don't then the hash values used by `vw` will not match the ones stored in the filter.
+It is very important that the bit precision for vw, set with `--bit_precision 16` is greater than or equal to `sff.bit_precision_required`.  If you don't then the hash values used by `vw` will not match up with the tokens stored in `sff.id2token`.
 
 
-### Step 2b:  Filter "on the fly" using a saved `sfile_filter`
-The workflow in step 2a requires making the intermediate file `doc_tokens_filtered.vw`.  Keeping track of all these filtered outputs is an issue.  Since you already need to keep track of a saved sfile_filter, you might as well use that as your [one and only one][spot] reference.
+### Step 2b:  Filter "on the fly" using a saved `sff`
+The workflow in step 2a requires making the intermediate file `doc_tokens_filtered.vw`.  Keeping track of all these filtered outputs is an issue.  Since you already need to keep track of a saved sff, you might as well use that as your [one and only one][spot] reference.
 
 ```
 rm -f *cache
-python $DECLASS/cmd/filter_sfile.py -s sfile_filter_file.pkl  doc_tokens.vw  \
+python $DECLASS/cmd/filter_sfile.py -s sff_file.pkl  doc_tokens.vw  \
     | vw --lda 5 --cache_file ddrs.cache --passes 10 -p prediction.dat --readable_model topics.dat --bit_precision 16
 ```
 The python function `filter_sfile.py` takes in `ddrs.vw` and streams a filtered sfile to stdout.  The `|` connects `vw` to this stream.  Notice we no longer specify an input file to `vw` (previously we passed it a `doc_tokens_filtered.vw` positional argument).
 
 ### Step 3:  Read the results with `LDAResults`
 
+You can view the topics and predictions with this:
+
 ```python
 num_topics = 5
-lda = LDAResults('topics.dat', 'prediction.dat', num_topics, 'sfile_filter_file.pkl')
+lda = LDAResults('topics.dat', 'prediction.dat', num_topics, 'sff_file.pkl')
 lda.topics.head()
 lda.predictions.head()
 lda.print_topics()
+```
+
+Note that `lda.topics` and `lda.predictions` are Pandas DataFrames.  So you can access them with the usual methods.
+
+```python
+# Print P[topic | token=kennedy]
+lda.topics.loc['kennedy']
 ```
 
 

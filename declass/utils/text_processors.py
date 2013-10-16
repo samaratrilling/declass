@@ -459,6 +459,7 @@ class SFileFilter(SaveLoad):
 
         self.precision = 2**bit_precision
         self.sfile_loaded = False
+        self.bit_precision_required = bit_precision
 
     def _get_hash_fun(self):
         """
@@ -526,37 +527,30 @@ class SFileFilter(SaveLoad):
 
         return token2id, token_score, doc_freq, num_docs
 
-    def resolve_collisions(self, seed=None):
+    def set_id2token(self, seed=None):
         """
-        Resolves collisions in self.token2id and sets self.id2token.
-        Works by finding a new id value for every collision, making the map
-        token2id injective.
+        Sets self.id2token, resolving collisions as needed (which alters
+        self.token2id)
         """
-        # TODO Add support for resolving of collisions in the case that we
-        # cannot make token2id injective.
-        # TODO Make these three methods logical in their layout again
-        self.id2token = self._load_sfile_rev(self.token2id, seed=seed)
-        self.collisions_resolved = True
+        self._resolve_collisions(seed=seed)
 
-    def _load_sfile_rev(self, token2id, seed=None):
-        """
-        Builds the "reverse" objects involved in loading an sfile.
+        self.id2token = {v: k for k, v in self.token2id.iteritems()}
 
-        Returns
-        -------
-        id2token : Dict
+    def _resolve_collisions(self, seed=None):
         """
-        id2token = {}
+        Alters self.token2id by finding new id values used using a
+        "random probe" method.
 
-        all_tokens = token2id.keys()
-        all_ides = token2id.values()
-        id_counts = Counter(all_ides)
+        Meant to be called by self.set_id2token.  If you call this by itself,
+        then self.token2id is altered, but self.id2token is not!!!!
+        """
+        id_counts = Counter(self.token2id.values())
+        vocab_size = self.vocab_size
         
         # Make sure we don't have too many collisions
-        vocab_size = len(token2id)
         num_collisions = vocab_size - len(id_counts)
         self._print(
-            "collisions, vocab_size = %d, %d" % (num_collisions, vocab_size))
+            "collisions = %d, vocab_size = %d" % (num_collisions, vocab_size))
         if num_collisions > vocab_size / 2.:
             msg = (
                 "Too many collisions to be efficient: "
@@ -565,38 +559,15 @@ class SFileFilter(SaveLoad):
                 % ( num_collisions, vocab_size))
             raise CollisionError(msg)
 
-        collisions = set()
-        for token, id_value in zip(all_tokens, all_ides):
-            if id_counts[id_value] == 1:
-                id2token[id_value] = token
-            else:
-                collisions.add(token)
-
-        self._resolve_collisions_core(
-            collisions, id_counts, token2id, id2token, seed=seed)
-
-        return id2token
-
-    def _resolve_collisions_core(
-        self, collisions, id_counts, token2id, id2token, seed=None):
-        """
-        Function used to resolve collisions.  Finds a id value not already
-        used using a "random probe" method.
-
-        Parameters
-        ----------
-        collisions : Set of tokens
-        id_counts : Dict
-            keys = id_values, values = number of times each id_value
-            appears in token2id
-        token2id : Dict
-        id2token : Dict
-        """
         # Seed for testing
         random.seed(seed)
 
+        # Resolve the collisions in this loop
+        collisions = (
+            tok for tok in self.token2id if id_counts[self.token2id[tok]] > 1)
+
         for token in collisions:
-            old_id = token2id[token]
+            old_id = self.token2id[token]
             new_id = old_id
             # If id_counts[old_id] > 1, then the collision still must be
             # resolved.  In that case, change new_id and update id_counts
@@ -609,14 +580,50 @@ class SFileFilter(SaveLoad):
                 id_counts[old_id] -= 1
                 id_counts[new_id] = 1
             # Update dictionaries
-            id2token[new_id] = token
-            token2id[token] = new_id
+            self.token2id[token] = new_id
+
+        self.collisions_resolved = True
+
+    def compactify(self):
+        """
+        Removes "gaps" in the id values in self.token2id.  Every single id
+        value will (probably) be altered.
+        """
+        # You can't compactify if self.bit_precision is too low
+        min_precision = int(np.ceil(np.log2(self.vocab_size)))
+
+        if self.bit_precision < min_precision:
+            raise CollisionError(
+                "Cannot compactify unless you increase self.bit_precision "
+                "to >= %d or remove some tokens" % min_precision)
+
+        new_token2id = {}
+        for i, tok in enumerate(self.token2id):
+            new_token2id[tok] = i
+        self.token2id = new_token2id
+
+        if hasattr(self, 'id2token'):
+            self.set_id2token()
+
+        self.set_bit_precision_required()
+        self._print(
+            "Compactification done.  self.bit_precision_required = %d"
+            % self.bit_precision_required)
+
+    def set_bit_precision_required(self):
+        """
+        Sets self.bit_precision_required to the minimum bit precision b such
+        that all token id values are less than 2^b.
+        """
+        max_id = np.max(self.token2id.values())
+
+        self.bit_precision_required = int(np.ceil(np.log2(max_id)))
 
     def filter_sfile(
         self, infile, outfile, doc_id_list=None, enforce_all_doc_id=True):
         """
-        Change tokens to id values (using self.token2id) and remove
-        tokens not in self.token2id.
+        Alter an sfile by converting tokens to id values, and removing tokens
+        not in self.token2id.  Optionally filters on doc_id.
 
         Parameters
         ----------
@@ -629,8 +636,8 @@ class SFileFilter(SaveLoad):
             in doc_id_list are seen.
         """
         assert self.sfile_loaded, "Must load an sfile before you can filter"
-        assert self.collisions_resolved, (
-            "Must resolve collisions before you can filter")
+        if not hasattr(self, 'id2token'):
+            self._print("Filtering an sfile before generating id2token")
 
         extra_filter = self._get_extra_filter(doc_id_list)
 
@@ -676,11 +683,11 @@ class SFileFilter(SaveLoad):
             assert self._doc_id_set.issubset(self._doc_id_seen), (
                 "Did not see every doc_id in the passed doc_id_list")
 
-    def remove_extreme_tokens(
+    def filter_extremes(
         self, doc_freq_min=0, doc_freq_max=np.inf, doc_fraction_min=0,
         doc_fraction_max=1):
         """
-        Remove extreme tokens from self (calling self.remove_tokens).
+        Remove extreme tokens from self (calling self.filter_tokens).
 
         Parameters
         ----------
@@ -701,12 +708,11 @@ class SFileFilter(SaveLoad):
         
         self._print(
             "Removed %d/%d tokens" % (to_remove_mask.sum(), len(frame)))
-        self.remove_tokens(frame[to_remove_mask].index)
+        self.filter_tokens(frame[to_remove_mask].index)
 
-    def remove_tokens(self, tokens):
+    def filter_tokens(self, tokens):
         """
-        Remove tokens from appropriate attributes.  The removed tokens will
-        removed when calling self.filter_sfile.
+        Remove tokens from appropriate attributes.
 
         Parameters
         ----------
@@ -736,12 +742,10 @@ class SFileFilter(SaveLoad):
         token_score = self.token_score
         doc_freq = self.doc_freq
 
-        assert token2id.keys() == token_score.keys() == doc_freq.keys()
         frame = pd.DataFrame(
-            {'id': token2id.values(),
-             'token_score': token_score.values(),
-             'doc_freq': doc_freq.values()},
-            index=token2id.keys())
+            {'token_score': [token_score[tok] for tok in token2id],
+             'doc_freq': [doc_freq[tok] for tok in token2id]},
+            index=[tok for tok in token2id])
         frame.index.name = 'token'
 
         return frame
@@ -750,11 +754,29 @@ class SFileFilter(SaveLoad):
     def vocab_size(self):
         return len(self.token2id)
 
+    def save(self, savepath, protocol=-1, set_id2token=True):
+        """
+        Pickle self to outfile.
+
+        Parameters
+        ----------
+        savefile : filepath or buffer
+        protocol : 0, 1, 2, -1
+            0 < 1 < 2 in terms of performance.  -1 means use highest available.
+        set_id2token : Boolean
+            If True, set self.id2token before saving.
+        """
+        if set_id2token:
+            self.set_id2token()
+
+        SaveLoad.save(self, savepath, protocol=protocol)
+
 
 def collision_probability(vocab_size, bit_precision):
     """
-    Approximate probability of collision (assuming perfect hashing).  See
-    the Wikipedia article on "The birthday problem" for details.
+    Approximate probability of at least one collision 
+    (assuming perfect hashing).  See the Wikipedia article on 
+    "The birthday problem" for details.
 
     Parameters
     ----------
