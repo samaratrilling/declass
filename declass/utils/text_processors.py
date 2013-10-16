@@ -443,7 +443,7 @@ class SFileFilter(SaveLoad):
     """
     Filters results stored in sfiles (sparsely formattted bag-of-words files).
     """
-    def __init__(self, formatter, bit_precision=20, verbose=False):
+    def __init__(self, formatter, bit_precision=24, verbose=False):
         """
         Parameters
         ----------
@@ -548,8 +548,9 @@ class SFileFilter(SaveLoad):
         num_collisions = vocab_size - len(hash_counts)
         self._print(
             "collisions, vocab_size = %d, %d" % (num_collisions, vocab_size))
-        if num_collisions > vocab_size / 20.:
+        if num_collisions > vocab_size / 10.:
             msg = (
+                "Too many collisions to be efficient: "
                 "num_collisions = %d.  vocab_size = %d.  Try using the "
                 "function collision_probability to estimate needed precision" 
                 % ( num_collisions, vocab_size))

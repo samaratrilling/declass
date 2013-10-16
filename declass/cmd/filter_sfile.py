@@ -9,7 +9,7 @@ from declass.utils.text_processors import SFileFilter
 
 def _cli():
     # Text to display after help
-    epilog = """
+    epilog = r"""
     EXAMPLES
     
     Read from stdin, write to stdout and pipe to vw
