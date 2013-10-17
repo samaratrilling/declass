@@ -20,8 +20,7 @@ class Topics(object):
     """
     def __init__(
         self, text_base_path=None, limit=None, file_type='*.txt',
-        shuffle=True, tokenizer_func=TokenizerBasic().text_to_token_list,
-        verbose=False):
+        shuffle=True, tokenizer=TokenizerBasic(), verbose=False):
         """
         Parameters
         ----------
@@ -34,9 +33,9 @@ class Topics(object):
             File types to filter by.
         shuffle : Boolean
             If True, shuffle paths in base_path
-        tokenizer_func : function
-            Converts text strings to lists of words.  Used to create dictionary
-            and corpus.
+        tokenizer : Subclass of BaseTokenizer
+            Should have a text_to_token_list method.  Try using MakeTokenizer
+            to convert a function to a valid tokenizer.
         verbose : bool
         """
         self.verbose = verbose
@@ -44,8 +43,7 @@ class Topics(object):
         if text_base_path:
             self.streamer = streamers.TextFileStreamer(
                     text_base_path=text_base_path, file_type=file_type,
-                    tokenizer_func=tokenizer_func, limit=limit,
-                    shuffle=shuffle)
+                    tokenizer=tokenizer, limit=limit, shuffle=shuffle)
 
     def set_dictionary(
         self, doc_id=None, load_path=None, no_below=5, no_above=0.5,

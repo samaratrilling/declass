@@ -137,11 +137,11 @@ def _tokenize_one(tokenizer, formatter, doc_id_level, path):
     with open(path, 'r') as f:
         text = f.read()
 
-    tokens = tokenizer.text_to_counter(text)
+    feature_values = tokenizer.text_to_counter(text)
 
     # Format
     doc_id = filefilter.path_to_newname(path, name_level=doc_id_level)
-    tok_sstr = formatter.get_sstr(tokens, importance=1, doc_id=doc_id)
+    tok_sstr = formatter.get_sstr(feature_values, importance=1, doc_id=doc_id)
 
     return tok_sstr
 

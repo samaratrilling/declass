@@ -36,26 +36,6 @@ class BaseTokenizer(SaveLoad):
         """
         return Counter(self.text_to_token_list(text))
 
-    def path_to_token_list(self, path):
-        """
-        Return a list of tokens.  
-        Filter/transform words according to the scheme this Tokenizer uses.
-
-        Parameters
-        ----------
-        path : String
-            Path to a file to read
-
-        Returns
-        -------
-        tokens : List
-            Tokenized text, e.g. ['hello', 'my', 'name', 'is', 'ian']
-        """
-        with open(path, 'r') as f:
-            text = f.read()
-
-        return self.text_to_token_list(text)
-
 
 class MakeTokenizer(BaseTokenizer):
     """

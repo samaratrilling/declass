@@ -8,6 +8,7 @@ import csv
 import json
 import cPickle
 from StringIO import StringIO
+from itertools import izip_longest
 
 
 ################################################################################
@@ -436,7 +437,27 @@ def quotechar_split(s, qc='"', sep=' '):
 
     return ret
          
+################################################################################
+# Misc.
+################################################################################
 
+def grouper(iterable, chunksize, fillvalue=None):
+    """
+    Group iterable into chunks of length n, with fillvalue for the (possibly)
+    smaller last chunk.
+
+    grouper('ABCDEFG', 3, 'x') --> ABC DEF Gxx
+
+    Parameters
+    ----------
+    iterable : Iterable
+    chunksie : Integer
+    fillvalue : Anything
+        Fill missing values with this
+    """
+    args = [iter(iterable)] * chunksize
+
+    return izip_longest(fillvalue=fillvalue, *args)
 
 
 ###############################################################################

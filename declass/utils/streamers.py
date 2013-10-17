@@ -1,14 +1,16 @@
 """
 Classes for streaming tokens/info from files/sparse files etc...
 """
+from collections import Counter
 from random import shuffle
 import re
+from functools import partial
 
-from gensim import corpora
+from parallel_easy.base import imap_easy
 
 from . import filefilter, nlp, common, text_processors
 from text_processors import TokenizerBasic
-from common import lazyprop
+from common import lazyprop, smart_open
 
 
 class BaseStreamer(object):
@@ -124,23 +126,19 @@ class VWStreamer(BaseStreamer):
         Stream record_dict from an sfile that sits on disk.
         """
         # Open file if path.  If buffer or StringIO, passthrough.
-        infile, was_path = common.openfile_wrap(self.sfile, 'rb')
-
-        if doc_id is not None:
-            doc_id = set(doc_id)
-
-        for i, line in enumerate(infile):
-            if i == self.limit:
-                raise StopIteration
-            
-            record_dict = self.formatter.sstr_to_dict(line) 
+        with common.smart_open(self.sfile, 'rb') as infile:
             if doc_id is not None:
-                if record_dict['doc_id'] not in doc_id:
-                    continue
-            yield record_dict
+                doc_id = set(doc_id)
 
-        if was_path:
-            infile.close()
+            for i, line in enumerate(infile):
+                if i == self.limit:
+                    raise StopIteration
+                
+                record_dict = self.formatter.sstr_to_dict(line) 
+                if doc_id is not None:
+                    if record_dict['doc_id'] not in doc_id:
+                        continue
+                yield record_dict
 
     def info_stream(self, doc_id=None):
         """
@@ -165,21 +163,21 @@ class TextFileStreamer(BaseStreamer):
     For streaming from text files.
     """
     def __init__(
-        self, text_base_path=None, file_type='*.txt', name_strip=r'\..*', 
-        tokenizer_func=TokenizerBasic().text_to_token_list, limit=None,
-        shuffle=True):
+        self, text_base_path=None, file_type='*', name_strip=r'\..*', 
+        tokenizer=TokenizerBasic(), limit=None, shuffle=True):
         """
         Parameters
         ----------
         text_base_path : string or None
             Base path to dir containing files.
-        file_type : string
-            File types to filter by.
+        file_type : String
+            String to filter files with.  E.g. '*.txt'.  Note that the filenames
+            will be converted to lowercase before this comparison.
         name_strip : raw string
             Regex to strip doc_id.
-        tokenizer_func : Function
-            If text_string is a string of text, tokenizer_func(text_string)
-            should return a list of strings (the "tokens").
+        tokenizer : Subclass of BaseTokenizer
+            Should have a text_to_token_list method.  Try using MakeTokenizer
+            to convert a function to a valid tokenizer.
         limit : int or None
             Limit for number of docs processed.
         shuffle : Boolean
@@ -189,7 +187,7 @@ class TextFileStreamer(BaseStreamer):
         self.file_type = file_type
         self.name_strip = name_strip
         self.limit = limit
-        self.tokenizer_func = tokenizer_func
+        self.tokenizer = tokenizer
         self.shuffle = shuffle
     
     @lazyprop
@@ -231,7 +229,9 @@ class TextFileStreamer(BaseStreamer):
 
     def info_stream(self, paths=None, doc_id=None, limit=None):
         """
-        Returns an iterator over paths returning token lists.
+        Returns an iterator over paths yielding dictionaries with information
+        about the file contained within.
+
         Parameters
         ----------
         paths : list of strings
@@ -255,11 +255,62 @@ class TextFileStreamer(BaseStreamer):
                 text = f.read()
                 doc_id = re.sub(self.name_strip, '', 
                         filefilter.path_to_name(onepath, strip_ext=False))
-                record_dict = {'text': text, 'cached_path': onepath, 
+                info_dict = {'text': text, 'cached_path': onepath, 
                         'doc_id': doc_id}
-                if self.tokenizer_func:
-                    record_dict['tokens'] = self.tokenizer_func(text)
+                if self.tokenizer:
+                    info_dict['tokens'] = (
+                        self.tokenizer.text_to_token_list(text))
 
-            yield record_dict
+            yield info_dict
 
-        
+    def to_vw(self, outfile, n_jobs=1, chunksize=1000):
+        """
+        Write our filestream to a VW (Vowpal Wabbit) formatted file.
+
+        Parameters
+        ----------
+        outfile : filepath or buffer
+        n_jobs : Integer
+            Use n_jobs different jobs to do the processing.  Set = 4 for 4 
+            jobs.  Set = -1 to use all available, -2 for all except 1,...
+        chunksize : Integer
+            Workers process this many jobs at once before pickling and sending
+            results to master.  If this is too low, communication overhead
+            will dominate.  If this is too high, jobs will not be distributed
+            evenly.
+        """
+        # Create an iterator over chunks of paths
+        path_group_iter = common.grouper(self.paths, chunksize)
+
+        formatter = text_processors.VWFormatter()
+
+        func = partial(_group_to_sstr, self, formatter)
+        results_iterator = imap_easy(func, path_group_iter, n_jobs, 1)
+
+        with smart_open(outfile, 'w') as open_outfile:
+            for sstr_group in results_iterator:
+                for sstr in sstr_group:
+                    open_outfile.write(sstr + '\n')
+
+
+def _group_to_sstr(streamer, formatter, path_group):
+    """
+    Return a list of sstr's (sparse string representations).  One for every
+    path in path_group.
+    """
+    # grouper might append None to the last group if this one is shorter
+    path_group = (p for p in path_group if p is not None)
+
+    group_results = []
+
+    info_stream = streamer.info_stream(paths=path_group)
+    for info_dict in info_stream:
+        doc_id = info_dict['doc_id']
+        tokens = info_dict['tokens']
+        feature_values = Counter(tokens)
+        tok_sstr = formatter.get_sstr(
+            feature_values, importance=1, doc_id=doc_id)
+
+        group_results.append(tok_sstr)
+
+    return group_results
