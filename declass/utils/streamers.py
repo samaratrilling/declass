@@ -164,7 +164,7 @@ class TextFileStreamer(BaseStreamer):
     """
     def __init__(
         self, text_base_path=None, file_type='*', name_strip=r'\..*', 
-        tokenizer=TokenizerBasic(), limit=None, shuffle=True):
+        tokenizer=None, tokenizer_func=None, limit=None, shuffle=True):
         """
         Parameters
         ----------
@@ -178,6 +178,9 @@ class TextFileStreamer(BaseStreamer):
         tokenizer : Subclass of BaseTokenizer
             Should have a text_to_token_list method.  Try using MakeTokenizer
             to convert a function to a valid tokenizer.
+        tokenizer_func : Function
+            Transforms a string (representing one file) to a list of strings
+            (the 'tokens').
         limit : int or None
             Limit for number of docs processed.
         shuffle : Boolean
@@ -188,7 +191,12 @@ class TextFileStreamer(BaseStreamer):
         self.name_strip = name_strip
         self.limit = limit
         self.tokenizer = tokenizer
+        self.tokenizer_func = tokenizer_func
         self.shuffle = shuffle
+
+        assert (tokenizer is None) or (tokenizer_func is None)
+        if tokenizer_func:
+            self.tokenizer = text_processors.MakeTokenizer(tokenizer_func)
     
     @lazyprop
     def paths(self):
