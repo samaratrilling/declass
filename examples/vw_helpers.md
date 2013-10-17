@@ -12,16 +12,18 @@ Assume you have a `base_path` (directory), called `my_base_path`, under which yo
 * Clone the [parallel easy][parallel_easy] module and put it in your `PYTHONPATH`.
 * Try converting the first 5 files in `my_base_path`.  The following should print 5 lines of of results, in [vw format][vwinput]
 
-    find my_base_path -type f | head -n 5 | python $DECLASS/cmd/files_to_vw.py
+```bash
+find my_base_path -type f | head -n 5 | python $DECLASS/cmd/files_to_vw.py
+```
 
 
-Convert the entire directory quickly.  
+Convert the entire directory quickly.
 
     python $DECLASS/cmd/files_to_vw.py --base_path my_base_path --n_jobs -2 -o doc_tokens.vw
 
-* The `-o` option is the path to your output file.  
-* The `--n_jobs -2` option means use all cores except for 1.
+* The `-o` option is the path to your output file.
 * For lots of small files, set `--chunksize` to something larger than the default (1000).  This is the number one parameter for performance optimization.
+* To see an explanation for all options, type `python $DECLASS/cmd/files_to_vw.py -h`.
 
 
 #### To use a custom tokenizer with Method 1
@@ -52,14 +54,14 @@ Quick test of VW on this `sfile`
 
 This produces two files:
 
-* `prediction.dat`.  Each row is one document.  The last column is the `doc_id`, the first columns are the (un-normalized) topics weights.  Dividing each row by the row sum, each row would be `P[topic | document]`.  Note that a new row is printed for *every* pass.  So if you run with `--passes 10`, there total number of rows will be 10 times the number of documents.
-* `topics.dat`.  Each row is a word.  The first column is the hash value for that word.  The columns are, after normalization, `P[word | topic]`.  Note that the hash values run from 0 to `2^bit_precision`.  So even if the word corresponding to hash value 42 never appears in your documents, it will appear in this output file (probably with a complete garbage value).
+* `prediction.dat`.  Each row is one document.  The last column is the `doc_id`, the first columns are the (un-normalized) topic weights.  Dividing each row by the row sum, each row would be `P[topic | document]`.  Note that a new row is printed for *every* pass.  So if you run with `--passes 10`, there total number of rows will be 10 times the number of documents.
+* `topics.dat`.  Each row is a token.  The first column is the hash value for that token.  The columns are, after normalization, `P[token | topic]`.  Note that the hash values run from 0 to `2^bit_precision`.  So even if the token corresponding to hash value 42 never appears in your documents, it will appear in this output file (probably with a complete garbage value).
 
 
 Working with an `SFileFilter` and `LDAResults`
 ----------------------------------------------
 
-There are some issues with using the raw `prediction.dat` and `topics.dat` files.  For one, the word hash values are not very interpretable--you want to work with actual English words.  Moreover, unless you allow for a very large hash space, you will have collisions.  Second, you will want some quick means to drop words from the vocabulary, or drop documents from the corpus without having to regenerate the VW file.  And finally, they need to be loaded into some suitable data structure for analysis.
+There are some issues with using the raw `prediction.dat` and `topics.dat` files.  For one, the token hash values are not very interpretable--you want to work with actual English words.  Moreover, unless you allow for a very large hash space, you will have collisions.  Second, you will want some quick means to drop tokens from the vocabulary, or drop documents from the corpus without having to regenerate the VW file.  And finally, they need to be loaded into some suitable data structure for analysis.
 
 ### Step 1:  Make an `SFileFilter`
 
@@ -73,8 +75,8 @@ sff.save('sff_file.pkl')
 ```
 
 * `.to_frame()` returns a DataFrame representation that is useful for deciding which tokens to filter.
-* `.filter_extremes` removes low/high frequency tokens from our filter's internal dictionaries.  It's just like those words were never present in the original text.
-* `.save` first sets the inverse mapping, `self.id2token`, then saves to disk.  To set the inverse mappin, we first resolve collisions by changing the id values for tokens that collide.  Note that if we didn't filter extreme tokens before resolving collisions, then we would have many words in our vocab, and there is a good chance the collisions would not be able to be resolved!
+* `.filter_extremes` removes low/high frequency tokens from our filter's internal dictionaries.  It's just like those tokens were never present in the original text.
+* `.save` first sets the inverse mapping, `self.id2token`, then saves to disk.  To set the inverse mappin, we first resolve collisions by changing the id values for tokens that collide.  Note that if we didn't filter extreme tokens before resolving collisions, then we would have many tokens in our vocab, and there is a good chance the collisions would not be able to be resolved!
 
 ### Step 2a:  Run VW on filtered output
 First save a "filtered" version of `doc_tokens.vw`.
@@ -82,7 +84,7 @@ First save a "filtered" version of `doc_tokens.vw`.
 ```python
 sff.filter_sfile('doc_tokens.vw', 'doc_tokens_filtered.vw')
 ```
-Our filtered output, `doc_tokens_filtered.vw` has replaced words with the id values that the `sff` chose.  This forces `vw` to use the values we chose (VW's hasher maps integers to integers, modulo `2^bit_precision`).  Since we saved our filter with `.save`, we will have access to both the `token2id` and `id2token` mappings.  Optionally we can filter based on `doc_id`.
+Our filtered output, `doc_tokens_filtered.vw` has replaced tokens with the id values that the `sff` chose.  This forces `vw` to use the values we chose (VW's hasher maps integers to integers, modulo `2^bit_precision`).  Since we saved our filter with `.save`, we will have access to both the `token2id` and `id2token` mappings.  Optionally we can filter based on `doc_id`.
 
 Now run `vw`.
 
