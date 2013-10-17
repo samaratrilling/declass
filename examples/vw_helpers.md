@@ -118,7 +118,7 @@ lda = LDAResults('topics.dat', 'prediction.dat', num_topics, 'sff_file.pkl')
 lda.print_topics()
 ```
 
-`lda` stores many joint and marginal probability distributions.  These are stored as `DataFrame` attributes with the prefix `pr_`.  For example, `lda.pr_token_topic` is the joint distribution of tokens and topics.  `lda.pr_token_g_topic` is the conditional distribution of tokens given topics.  `lda_pr_token` is the marginal density of tokens.
+`lda` stores many joint and marginal probability distributions.  These are stored as pandas Series and DataFrame attributes with the prefix `pr_`.  For example, `lda.pr_token_topic` is the joint distribution of tokens and topics.  `lda.pr_token_g_topic` is the conditional distribution of tokens given topics.  `lda_pr_token` is the marginal density of tokens.
 
 Since these structures are Pandas Series/DataFrames, you can access them with the usual methods.
 
@@ -129,7 +129,9 @@ lda.pr_token_g_topic.kennedy
 # Print P[token=war]
 lda.pr_token.war
 
-lda.pr_token_g_topic[['kennedy', 'vietnam', 'war']] 
+lda.pr_token_g_topic[['kennedy', 'vietnam', 'war']]
+
+lda.pr_topic_g_doc.to_csv('doc_topic_weights.csv')
 ```
 
 In addition, the `doc_freq` and `token_score` (and anything else that is in `sff.to_frame()` is accessible in `lda.sfile_frame`.
@@ -138,7 +140,8 @@ In addition, the `doc_freq` and `token_score` (and anything else that is in `sff
 Contribute!
 -----------
 * Submit feature requests or bug reports by opening an [issue][issue]
-* Optimize slow spots and submit a pull request.  In particular, `SparseFormatter._parse_sstr` could be re-written in Cython or Numba.
+* There are many ways to analyze topics...some should be built into `LDAResults`.  If you have ideas, let us know.
+* Optimize slow spots and submit a pull request.  In particular, `SparseFormatter._parse_feature_str` could be re-written in Cython or Numba.
 
 
 
