@@ -19,7 +19,9 @@ find my_base_path -type f | head -n 5 | python $DECLASS/cmd/files_to_vw.py
 
 Convert the entire directory quickly.
 
-    python $DECLASS/cmd/files_to_vw.py --base_path my_base_path --n_jobs -2 -o doc_tokens.vw
+```bash
+python $DECLASS/cmd/files_to_vw.py --base_path my_base_path --n_jobs -2 -o doc_tokens.vw
+```
 
 * The `-o` option is the path to your output file.
 * For lots of small files, set `--chunksize` to something larger than the default (1000).  This is the number one parameter for performance optimization.
@@ -50,7 +52,7 @@ Quick test of VW on this `sfile`
 * The call `vw --lda 5` means run LDA and use 5 topics.
 * The `--cache_file` option means "during the first pass, convert the input to a binary 'cached' format and use that for subsequent results.  The `rm -f *cache` is important since if you don't erase the cache file, `VW` will re-use the old one, even if you specify a new input file!
 * The `--bit_precision 16` option means: "Use 16 bits of precision" when [hashing][hashing] tokens.  This will cause many collisions but won't effect the results much at all.  Vowpal Wabbit is *very* sensitive to bit precision!  If you make it bigger, you need many more passes to get decent results.
-* See [this slideshow][vwlda] about LDA in VW.
+* See [this slideshow][vwlda] about LDA in VW, and [this slideshow][vwtricks] for some VW technical tricks.
 
 This produces two files:
 
@@ -70,7 +72,8 @@ sff = SFileFilter(text_processors.VWFormatter(), verbose=True)
 sff.load_sfile('doc_tokens.vw')
 df = sff.to_frame()
 df.head()
-sff.filter_extremes(doc_freq_min=5, doc_fraction_max=0.5)
+df.describe()
+sff.filter_extremes(doc_freq_min=5, doc_fraction_max=0.8)
 sff.save('sff_file.pkl')
 ```
 
@@ -132,10 +135,19 @@ lda.pr_token_g_topic[['kennedy', 'vietnam', 'war']]
 In addition, the `doc_freq` and `token_score` (and anything else that is in `sff.to_frame()` is accessible in `lda.sfile_frame`.
 
 
+Contribute!
+-----------
+* Submit feature requests or bug reports by opening an [issue][issue]
+* Optimize slow spots and submit a pull request.  In particular, `SparseFormatter._parse_sstr` could be re-written in Cython or Numba.
+
+
+
 
 [vwinput]: https://github.com/JohnLangford/vowpal_wabbit/wiki/Input-format
 [declassrepo]: https://github.com/declassengine/declass
 [parallel_easy]: https://github.com/langmore/parallel_easy
 [vwlda]: https://github.com/JohnLangford/vowpal_wabbit/wiki/lda.pdf
+[vwtricks]: www.slideshare.net/jakehofman/technical-tricks-of-vowpal-wabbit‎
 [hashing]: https://github.com/JohnLangford/vowpal_wabbit/wiki/Feature-Hashing-and-Extraction
 [spot]: http://en.wikipedia.org/wiki/Single_Point_of_Truth
+[issue]: https://github.com/organizations/declassengine/dashboard/issues
