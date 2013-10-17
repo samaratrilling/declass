@@ -15,9 +15,13 @@ Assume you have a `base_path` (directory), called `my_base_path`, under which yo
     find my_base_path -type f | head -n 5 | python $DECLASS/cmd/files_to_vw.py
 
 
-* Convert the entire directory quickly.  The `-o` option is the path to your output file.  The `--n_jobs -2` option means use all cores except for 1.
+Convert the entire directory quickly.  
 
     python $DECLASS/cmd/files_to_vw.py --base_path my_base_path --n_jobs -2 -o doc_tokens.vw
+
+* The `-o` option is the path to your output file.  
+* The `--n_jobs -2` option means use all cores except for 1.
+* For lots of small files, set `--chunksize` to something larger than the default (1000).  This is the number one parameter for performance optimization.
 
 
 #### To use a custom tokenizer with Method 1
@@ -106,17 +110,25 @@ You can view the topics and predictions with this:
 ```python
 num_topics = 5
 lda = LDAResults('topics.dat', 'prediction.dat', num_topics, 'sff_file.pkl')
-lda.topics.head()
-lda.predictions.head()
 lda.print_topics()
 ```
 
-Note that `lda.topics` and `lda.predictions` are Pandas DataFrames.  So you can access them with the usual methods.
+`lda` stores many joint and marginal probability distributions.  These are stored as `DataFrame` attributes with the prefix `pr_`.  For example, `lda.pr_token_topic` is the joint distribution of tokens and topics.  `lda.pr_token_g_topic` is the conditional distribution of tokens given topics.  `lda_pr_token` is the marginal density of tokens.
+
+Since these structures are Pandas Series/DataFrames, you can access them with the usual methods.
 
 ```python
-# Print P[topic | token=kennedy]
-lda.topics.loc['kennedy']
+# Print P[token=kennedy | topic]
+lda.pr_token_g_topic.kennedy
+
+# Print P[token=war]
+lda.pr_token.war
+
+lda.pr_token_g_topic[['kennedy', 'vietnam', 'war']] 
 ```
+
+In addition, the `doc_freq` and `token_score` (and anything else that is in `sff.to_frame()` is accessible in `lda.sfile_frame`.
+
 
 
 [vwinput]: https://github.com/JohnLangford/vowpal_wabbit/wiki/Input-format

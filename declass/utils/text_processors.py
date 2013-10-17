@@ -685,7 +685,8 @@ class SFileFilter(SaveLoad):
 
     def filter_extremes(
         self, doc_freq_min=0, doc_freq_max=np.inf, doc_fraction_min=0,
-        doc_fraction_max=1):
+        doc_fraction_max=1, token_score_min=0, token_score_max=np.inf,
+        token_score_quantile_min=0, token_score_quantile_max=1):
         """
         Remove extreme tokens from self (calling self.filter_tokens).
 
@@ -697,6 +698,11 @@ class SFileFilter(SaveLoad):
         doc_fraction_min : Float in [0, 1]
             Remove tokens that are in less than this fraction of documents
         doc_fraction_max : Float in [0, 1]
+        token_score_quantile_min : Float in [0, 1]
+            Minimum quantile that the token score (usually total token count)
+            can be in.
+        token_score_quantile_max : Float in [0, 1]
+            Maximum quantile that the token score can be in
         """
         frame = self.to_frame()
         to_remove_mask = (
@@ -704,6 +710,12 @@ class SFileFilter(SaveLoad):
                 | (frame.doc_freq > doc_freq_max)
                 | (frame.doc_freq < (doc_fraction_min * self.num_docs))
                 | (frame.doc_freq > (doc_fraction_max * self.num_docs))
+                | (frame.token_score < token_score_min)
+                | (frame.token_score > token_score_max)
+                | (frame.token_score 
+                    < frame.token_score.quantile(token_score_quantile_min))
+                | (frame.token_score 
+                    > frame.token_score.quantile(token_score_quantile_max))
                 )
         
         self._print(

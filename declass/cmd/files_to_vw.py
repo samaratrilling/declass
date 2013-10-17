@@ -6,6 +6,7 @@ import argparse
 from functools import partial
 import sys
 from collections import Counter
+from random import shuffle
 
 from declass.utils import filefilter, text_processors, nlp
 from declass.utils.common import SaveLoad
@@ -52,6 +53,10 @@ def _cli():
         help='Form the record doc_id using items this far back in the path'
         ' e.g. if doc_id_level == 2, and path = mydata/1234/3.txt, then we '
         'will have doc_id = 1234_3.  [default: %(default)s]')
+    io_grp.add_argument(
+        '--no_shuffle', action='store_true', default=False,
+        help="Unless this flag is given, paths denoted by --base_path will be "
+        "read in random order.")
 
     tok_grp = parser.add_mutually_exclusive_group(required=False)
     tok_grp.add_argument(
@@ -88,13 +93,14 @@ def _cli():
 
     # Call the module interface
     tokenize(
-        args.outfile, args.paths, args.base_path, args.tokenizer_type,
-        args.tokenizer_pickle, args.doc_id_level, args.n_jobs, args.chunksize)
+        args.outfile, args.paths, args.base_path, args.no_shuffle,
+        args.tokenizer_type, args.tokenizer_pickle, args.doc_id_level,
+        args.n_jobs, args.chunksize)
 
 
 def tokenize(
-    outfile, paths, base_path, tokenizer_type, tokenizer_pickle, doc_id_level,
-    n_jobs, chunksize):
+    outfile, paths, base_path, no_shuffle, tokenizer_type, tokenizer_pickle,
+    doc_id_level, n_jobs, chunksize):
     """
     Write later if module interface is needed. See _cli for the documentation.
     """
@@ -102,6 +108,9 @@ def tokenize(
 
     if base_path:
         paths = filefilter.get_paths(base_path, file_type='*', get_iter=True)
+        if no_shuffle is False:
+            paths = list(paths)
+            shuffle(paths)
 
     if tokenizer_pickle is not None:
         tokenizer = SaveLoad.load(tokenizer_pickle)

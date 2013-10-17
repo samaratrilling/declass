@@ -204,25 +204,59 @@ class LDAResults(object):
         """
         self.num_topics = num_topics
 
+        if not isinstance(sfile_filter, text_processors.SFileFilter):
+            sfile_filter = text_processors.SFileFilter.load(sfile_filter)
 
-        if isinstance(sfile_filter, text_processors.SFileFilter):
-            self._sfile_filter = sfile_filter
-        else:
-            self._sfile_filter = text_processors.SFileFilter.load(sfile_filter)
+        self.sfile_frame = sfile_filter.to_frame()
 
-        topics = parse_lda_topics(topics_file, num_topics)
-        topics = topics.reindex(index=self._sfile_filter.id2token.keys())
-        topics = topics.rename(index=self._sfile_filter.id2token)
-        self.topics = topics
+        # Load the topics file
+        topics = parse_lda_topics(topics_file, num_topics, normalize=False)
+        topics = topics.reindex(index=sfile_filter.id2token.keys())
+        topics = topics.rename(index=sfile_filter.id2token)
 
+        # Load the predictions
         start_line = find_start_line_lda_predictions(
             predictions_file, num_topics)
-        self.predictions = parse_lda_predictions(
-            predictions_file, num_topics, start_line)
+        predictions = parse_lda_predictions(
+            predictions_file, num_topics, start_line, normalize=False)
+
+        # Set probabilities
+        self._set_probabilities(topics, predictions)
+
+    def _set_probabilities(self, topics, predictions):
+        topic_sums = topics.sum()
+        self.pr_topic = topic_sums / topic_sums.sum()
+
+        word_sums = topics.sum(axis=1)
+        self.pr_token = word_sums / word_sums.sum()
+        self.pr_topic_token = topics / topics.sum().sum()
+
+        doc_sums = predictions.sum(axis=1)
+        self.pr_doc = doc_sums / doc_sums.sum()
+        self.pr_topic_doc = predictions / predictions.sum().sum()
+
+    @property
+    def pr_token_g_topic(self):
+        return self.pr_topic_token.div(self.pr_topic, axis=1).T
+
+    @property
+    def pr_topic_g_token(self):
+        return self.pr_topic_token.div(self.pr_token, axis=0)
+
+    @property
+    def pr_doc_g_topic(self):
+        # Note:  self.pr_topic is computed using a different file than
+        # self.pr_topic_doc....the resultant implied pr_topic series differ
+        # unless many passes are used.
+        return self.pr_topic_doc.div(self.pr_topic, axis=1).T
+
+    @property
+    def pr_topic_g_doc(self):
+        return self.pr_topic_doc.div(self.pr_doc, axis=0)
 
     def print_topics(self, topn=5, outfile=sys.stdout):
         """
-        Print ordered words in topics to stdout or a file.
+        Print the top results for self.pr_token_g_topic for all topics
 
         Parameters
         ----------
@@ -232,11 +266,19 @@ class LDAResults(object):
         header = " Printing top %d tokens in every topic" % topn
         outstr = "=" * 10 + header + "=" * 10
 
-        for topic_name in self.topics.columns:
+        for topic_name in self.pr_topic_token.columns:
             outstr += '\n' + "-" * 30 + '\n%s' % topic_name
-            sorted_topic = self.topics[topic_name].order(ascending=False)
+            sorted_topic = self.pr_topic_token[topic_name].order(
+                ascending=False)
             outstr += "\n" + sorted_topic.head(topn).to_string() + "\n"
         
         outfile.write(outstr)
 
 
+class FrameHolder(object):
+    """
+    Holds Series and DataFrames in self.__dict__
+    """
+    def add_frame(self, name, frame):
+        assert isinstance(frame, pd.DataFrame) or isinstance(frame, pd.Series)
+        self.__dict__[name] = frame

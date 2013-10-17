@@ -181,6 +181,11 @@ class TestSFileFilter(unittest.TestCase):
         self.sff.filter_extremes(doc_fraction_min=0.8)
         self.check_keys(self.sff, ['word1'])
 
+    def test_filter_extremes_5(self):
+        self.sff.load_sfile(self.sfile_1)
+        self.sff.filter_extremes(token_score_quantile_max=0.4)
+        self.check_keys(self.sff, ['word2', 'word3'])
+
     def test_filter_sfile_1(self):
         self.sff.load_sfile(self.sfile_1)
         self.sff.filter_tokens('word1')
