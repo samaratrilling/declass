@@ -26,6 +26,17 @@ class TestTokenizerBasic(unittest.TestCase):
         self.assertEqual(result, benchmark)
 
 
+class TestSparseFormatter(unittest.TestCase):
+    def setUp(self):
+        self.formatter = text_processors.SparseFormatter()
+
+    def test_parse_feature_str(self):
+        feature_str = ' hi:1 bye:2.2 what:3'
+        feature_values = self.formatter._parse_feature_str(feature_str)
+        benchmark = {'hi': 1, 'bye': 2.2, 'what': 3}
+        self.assertEqual(feature_values, benchmark)
+
+
 class TestVWFormatter(unittest.TestCase):
     """
     """

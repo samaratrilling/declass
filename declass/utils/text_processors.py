@@ -5,6 +5,7 @@ import zlib
 import random
 import copy
 import cPickle
+import re
 
 import nltk
 import numpy as np
@@ -147,7 +148,7 @@ class SparseFormatter(object):
     Base class for sparse formatting, e.g. VW or svmlight.  
     Not meant to be directly used.
     """
-    def _parse_sstr(self, feature_str):
+    def _parse_feature_str(self, feature_str):
         """
         Parses a sparse feature string and returns 
         feature_values = {feature1: value1, feature2: value2,...}
@@ -197,7 +198,7 @@ class SparseFormatter(object):
 
         record_dict = self._parse_preamble(preamble)
 
-        record_dict['feature_values'] = self._parse_sstr(feature_str)
+        record_dict['feature_values'] = self._parse_feature_str(feature_str)
 
         return record_dict
 
@@ -226,6 +227,8 @@ class SparseFormatter(object):
         token_list = []
         if 'feature_values' in record_dict:
             for feature, value in record_dict['feature_values'].iteritems():
+                # If the value is a non-integer score (e.g. tfidf), then
+                # it cannot correspond to a number of tokens
                 int_value = int(value)
                 assert int_value == value
                 token_list += [feature] * int_value
@@ -273,6 +276,14 @@ class SparseFormatter(object):
                 if index == limit:
                     raise StopIteration
                 yield self.sstr_to_token_list(line)
+
+    def _string_to_number(self, string):
+        try:
+            number = int(string)
+        except ValueError:
+            number = float(string)
+
+        return number
 
 
 class VWFormatter(SparseFormatter):
@@ -382,14 +393,6 @@ class VWFormatter(SparseFormatter):
                     parsed[key] = value
         
         return parsed
-
-    def _string_to_number(self, string):
-        try:
-            number = int(string)
-        except ValueError:
-            number = float(string)
-
-        return number
 
 
 class SVMLightFormatter(SparseFormatter):
