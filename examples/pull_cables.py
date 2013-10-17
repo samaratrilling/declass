@@ -29,5 +29,12 @@ def main(write_dir, limit=None):
             f.write(text)
 
 if __name__ == '__main__':
-    main(write_dir='/tmp', limit=10)
+    DATA = os.getenv('DATA')
+    DECLASS = os.path.join(DATA, 'prod', 'declass')
+    CABLES = os.path.join(DECLASS, 'cables')
+    from time import time
+    t0 = time()
+    main(write_dir=CABLES, limit=100000)
+    t1 = time()
+    print 'poll took %s seconds'%(t1-t0)
 
