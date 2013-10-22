@@ -20,7 +20,7 @@ class Topics(object):
     """
     def __init__(
         self, text_base_path=None, limit=None, file_type='*.txt',
-        shuffle=True, tokenizer=TokenizerBasic(), verbose=False):
+        shuffle=True, tokenizer=None, tokenizer_func=None, verbose=False):
         """
         Parameters
         ----------
@@ -36,14 +36,20 @@ class Topics(object):
         tokenizer : Subclass of BaseTokenizer
             Should have a text_to_token_list method.  Try using MakeTokenizer
             to convert a function to a valid tokenizer.
+        tokenizer_func : function
+            Takes in string (text) and returns list of strings.
         verbose : bool
         """
         self.verbose = verbose
+
+        assert tokenizer or tokenizer_func, (
+                        'you must specify either tokenizer or tokenizer_func')
         
         if text_base_path:
             self.streamer = streamers.TextFileStreamer(
                     text_base_path=text_base_path, file_type=file_type,
-                    tokenizer=tokenizer, limit=limit, shuffle=shuffle)
+                    tokenizer=tokenizer, tokenizer_func=tokenizer_func, 
+                    limit=limit, shuffle=shuffle)
 
     def set_dictionary(
         self, doc_id=None, load_path=None, no_below=5, no_above=0.5,
