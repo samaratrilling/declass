@@ -619,8 +619,6 @@ class SFileFilter(SaveLoad):
             in doc_id_list are seen.
         """
         assert self.sfile_loaded, "Must load an sfile before you can filter"
-        if not hasattr(self, 'id2token'):
-            self._print("Filtering an sfile before generating id2token")
 
         extra_filter = self._get_extra_filter(doc_id_list)
 

@@ -287,31 +287,40 @@ class TextFileStreamer(BaseStreamer):
             will dominate.  If this is too high, jobs will not be distributed
             evenly.
         """
+        # Note:  This is similar to declass/cmd/files_to_vw.py
+        # This implementation is more complicated, due to the fact that a
+        # streamer specifies the method to extract doc_id from a stream.
+        # To be faithful to the streamer, we must therefore use the streamer
+        # to stream the files.  This requires a combination of imap_easy and
+        # a chunker.
+        #
         # Create an iterator over chunks of paths
         path_group_iter = common.grouper(self.paths, chunksize)
 
         formatter = text_processors.VWFormatter()
 
         func = partial(_group_to_sstr, self, formatter)
+        # Process one chunk at a time...set imap_easy chunksize arg to 1
+        # since each chunk contains many paths.
         results_iterator = imap_easy(func, path_group_iter, n_jobs, 1)
 
         with smart_open(outfile, 'w') as open_outfile:
-            for sstr_group in results_iterator:
-                for sstr in sstr_group:
+            for chunk_results in results_iterator:
+                for sstr in chunk_results:
                     open_outfile.write(sstr + '\n')
 
 
-def _group_to_sstr(streamer, formatter, path_group):
+def _chunk_to_sstr(streamer, formatter, path_chunk):
     """
     Return a list of sstr's (sparse string representations).  One for every
-    path in path_group.
+    path in path_chunk.
     """
-    # grouper might append None to the last group if this one is shorter
-    path_group = (p for p in path_group if p is not None)
+    # grouper might append None to the last chunk if this one is shorter
+    path_chunk = (p for p in path_chunk if p is not None)
 
-    group_results = []
+    chunk_results = []
 
-    info_stream = streamer.info_stream(paths=path_group)
+    info_stream = streamer.info_stream(paths=path_chunk)
     for info_dict in info_stream:
         doc_id = info_dict['doc_id']
         tokens = info_dict['tokens']
@@ -319,6 +328,6 @@ def _group_to_sstr(streamer, formatter, path_group):
         tok_sstr = formatter.get_sstr(
             feature_values, importance=1, doc_id=doc_id)
 
-        group_results.append(tok_sstr)
+        chunk_results.append(tok_sstr)
 
-    return group_results
+    return chunk_results
