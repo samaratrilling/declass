@@ -167,7 +167,7 @@ class DBCONNECT(object):
 
 if __name__ == '__main__':
 
-    dbCon = DBCONNECT(host_name='mysql.csail.mit.edu', db_name='declassification', user_name='declass', pwd='declass')
+    dbCon = DBCONNECT(host_name, db_name, user_name, pwd)
     print dbCon.get_table_names()
     #table_name = 'declassification'
     table_name = 'DocumentPair'
