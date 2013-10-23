@@ -10,8 +10,7 @@ class DBCONNECT(object):
 
     Example
     -------
-    dbCon = DBCONNECT(host_name='mysql.csail.mit.edu',
-            db_name='declassification', user_name='declass', pwd='declass')
+    dbCon = DBCONNECT(host_name, db_name, user_name, pwd)
     table_name = 'declassification'
     doc_id = 242518
     fields = 'body, title'
