@@ -8,7 +8,24 @@ Create the sparse file (sfile)
 
 Assume you have a `base_path` (directory), called `my_base_path`, under which you have all the documents you want to analyze.
 
-### Method 1: `files_to_vw.py`
+### Method 1: From a `TextFileStreamer`
+
+A `TextFileStreamer` creates streams of `info` (e.g. tokens, `doc_id`, and more) from a source of text files.  We can use the `.to_vw()` method to convert this stream into a VW formatted file.
+
+The `TextFileStreamer` needs a method to convert the text files to a list of strings (the *tokens*).  To do this we will use a `Tokenizer`.  We have provided a very simple one for you, the `TokenizerBasic`.  To create your own, you simply need to subclass `BaseTokenizer` with a class that has a method, `.text_to_token_list()` that takes in a string (representing a single document) and spits out a list of strings (the *tokens*).  If you already have such a function, then you can create a tokenizer by doing:
+
+    my_tokenizer = MakeTokenizer(my_tokenizing_func)
+
+Once you have a tokenizer, just initialize a streamer and write the VW file.
+
+```python
+stream = TextFileStreamer(text_base_path='bodyfiles', tokenizer=my_tokenizer)
+stream.to_vw('doc_tokens.vw', n_jobs=-1)
+```
+
+### Method 2: `files_to_vw.py`
+`files_to_vw.py` is a fast and simple command line utility for converting files to VW format.
+
 * Clone the [parallel easy][parallel_easy] module and put it in your `PYTHONPATH`.
 * Try converting the first 5 files in `my_base_path`.  The following should print 5 lines of of results, in [vw format][vwinput]
 
@@ -29,7 +46,7 @@ python $DECLASS/cmd/files_to_vw.py --base_path my_base_path --n_jobs -2 -o doc_t
 
 
 #### To use a custom tokenizer with Method 1
-The default tokenizer removes stopwords, converts to lowercase, and that's it.  You of course will want to create custom tokenizers.  A `Tokenizer` simply needs to be a subclass of `BaseTokenizer`.  In particular, it (only) needs to have a method, `.text_to_token_list()` that takes in a string (representing a single document) and spits out a list of strings (the *tokens*).  If you already have such a function, then you can create a tokenizer by doing:
+The utility `files_to_vw` uses a `Tokenizer` to convert the text files to lists of strings (the *tokens*).  The default tokenizer is `TokenizerBasic`, which removes stopwords, converts to lowercase, and that's it.  You of course will want to create custom tokenizers.  To create your own, you simply need to subclass `BaseTokenizer` with a class that has a method, `.text_to_token_list()` that takes in a string (representing a single document) and spits out a list of strings (the *tokens*).  If you already have such a function, then you can create a tokenizer by doing:
 
     my_tokenizer = MakeTokenizer(my_tokenizing_func)
 
@@ -39,9 +56,7 @@ In any case, the steps are:
 * Pass this path as the `--tokenizer_pickle` option to `files_to_vw.py`
 * If you think this tokenizer is useful for everyone, then submit an issue requesting this be added to the standard tokenizers, then it can be called with the `--tokenizer_type` argument.
 
-### Method 2: From a `TextFileStreamer`
 
-TODO: Add this
 
 Quick test of VW on this `sfile`
 --------------------------------
@@ -87,7 +102,14 @@ First save a "filtered" version of `doc_tokens.vw`.
 ```python
 sff.filter_sfile('doc_tokens.vw', 'doc_tokens_filtered.vw')
 ```
-Our filtered output, `doc_tokens_filtered.vw` has replaced tokens with the id values that the `sff` chose.  This forces `vw` to use the values we chose (VW's hasher maps integers to integers, modulo `2^bit_precision`).  Since we saved our filter with `.save`, we will have access to both the `token2id` and `id2token` mappings.  Optionally we can filter based on `doc_id`.
+Our filtered output, `doc_tokens_filtered.vw` has replaced tokens with the id values that the `sff` chose.  This forces `vw` to use the values we chose (VW's hasher maps integers to integers, modulo `2^bit_precision`).  Since we saved our filter with `.save`, we will have access to both the `token2id` and `id2token` mappings.  We can also filter based on `doc_id` as follows
+
+```python
+meta = pd.read_csv('path_to_metadata.csv')
+doc_id_to_keep = meta[meta['administration'] == 'Nixon'].index
+sff.filter_sfile(
+    'doc_tokens.vw', 'doc_tokens_filtered.vw', doc_id_list=doc_id_to_keep)
+```
 
 Now run `vw`.
 

@@ -275,10 +275,3 @@ class LDAResults(object):
         outfile.write(outstr)
 
 
-class FrameHolder(object):
-    """
-    Holds Series and DataFrames in self.__dict__
-    """
-    def add_frame(self, name, frame):
-        assert isinstance(frame, pd.DataFrame) or isinstance(frame, pd.Series)
-        self.__dict__[name] = frame

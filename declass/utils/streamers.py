@@ -300,27 +300,27 @@ class TextFileStreamer(BaseStreamer):
         formatter = text_processors.VWFormatter()
 
         func = partial(_group_to_sstr, self, formatter)
-        # Process one chunk at a time...set imap_easy chunksize arg to 1
-        # since each chunk contains many paths.
+        # Process one group at a time...set imap_easy chunksize arg to 1
+        # since each group contains many paths.
         results_iterator = imap_easy(func, path_group_iter, n_jobs, 1)
 
         with smart_open(outfile, 'w') as open_outfile:
-            for chunk_results in results_iterator:
-                for sstr in chunk_results:
+            for group_results in results_iterator:
+                for sstr in group_results:
                     open_outfile.write(sstr + '\n')
 
 
-def _chunk_to_sstr(streamer, formatter, path_chunk):
+def _group_to_sstr(streamer, formatter, path_group):
     """
     Return a list of sstr's (sparse string representations).  One for every
-    path in path_chunk.
+    path in path_group.
     """
-    # grouper might append None to the last chunk if this one is shorter
-    path_chunk = (p for p in path_chunk if p is not None)
+    # grouper might append None to the last group if this one is shorter
+    path_group = (p for p in path_group if p is not None)
 
-    chunk_results = []
+    group_results = []
 
-    info_stream = streamer.info_stream(paths=path_chunk)
+    info_stream = streamer.info_stream(paths=path_group)
     for info_dict in info_stream:
         doc_id = info_dict['doc_id']
         tokens = info_dict['tokens']
@@ -328,6 +328,6 @@ def _chunk_to_sstr(streamer, formatter, path_chunk):
         tok_sstr = formatter.get_sstr(
             feature_values, importance=1, doc_id=doc_id)
 
-        chunk_results.append(tok_sstr)
+        group_results.append(tok_sstr)
 
-    return chunk_results
+    return group_results
