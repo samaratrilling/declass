@@ -426,13 +426,13 @@ class SFileFilter(SaveLoad):
     """
     Filters results stored in sfiles (sparsely formattted bag-of-words files).
     """
-    def __init__(self, formatter, bit_precision=16, verbose=False):
+    def __init__(self, formatter, bit_precision=16, verbose=True):
         """
         Parameters
         ----------
         formatter : Subclass of SparseFormatter
         bit_precision : Integer
-            Hashes are taken modulo 2**bit_precision.  Currently must by < 32.
+            Hashes are taken modulo 2**bit_precision.  Currently must be < 32.
         """
         assert isinstance(bit_precision, int)
 
@@ -464,7 +464,7 @@ class SFileFilter(SaveLoad):
 
     def load_sfile(self, sfile):
         """
-        Load an sfile, building self.token2id and self.id2token.
+        Load an sfile, building self.token2id
 
         Parameters
         ----------
@@ -565,6 +565,7 @@ class SFileFilter(SaveLoad):
             # Update dictionaries
             self.token2id[token] = new_id
 
+        self._print("All collisions resolved")
         self.collisions_resolved = True
 
     def compactify(self):
@@ -613,12 +614,19 @@ class SFileFilter(SaveLoad):
         infile : file path or buffer
         outfile : file path or buffer
         doc_id_list : Iterable over strings
-            Remove rows with doc_id not in this list
+            Keep only rows with doc_id in this list
         enforce_all_doc_id : Boolean
             If True (and doc_id is not None), raise exception unless all doc_id
             in doc_id_list are seen.
         """
         assert self.sfile_loaded, "Must load an sfile before you can filter"
+        if not hasattr(self, 'id2token'):
+            self._print(
+                "WARNING:  Filtering an sfile before setting self.id2token.  "
+                "The resultant outfile will have collisions and you will not "
+                "be able to convert ids back to tokens.\nIt is recommended to "
+                "call: self.compactify() then either self.set_id2token() or "
+                " self.save() before filtering")
 
         extra_filter = self._get_extra_filter(doc_id_list)
 
@@ -758,6 +766,7 @@ class SFileFilter(SaveLoad):
             0 < 1 < 2 in terms of performance.  -1 means use highest available.
         set_id2token : Boolean
             If True, set self.id2token before saving.
+            Used to associate tokens with the output of a VW file.
         """
         if set_id2token:
             self.set_id2token()

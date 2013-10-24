@@ -1,7 +1,12 @@
 Working with Vowpal Wabbit (VW)
 ===============================
 
-To work with the `declass` utilities you need to clone the [declass repo][declassrepo] and put it in your `PYTHONPATH`.  You should then set a shell variable with `export DECLASS=path-to-declass-directory`.
+To work with the `declass` utilities you need to:
+
+* Clone the [declass repo][declassrepo] and put it in your `PYTHONPATH`.  You should then set a shell variable with `export DECLASS=path-to-declass-directory`.
+* Clone the [parallel easy][parallel_easy] module and put it in your `PYTHONPATH`.
+
+These files are being updated often.  If you already cloned them, make sure to pull the latest release.
 
 Create the sparse file (sfile)
 ------------------------------
@@ -19,6 +24,10 @@ The `TextFileStreamer` needs a method to convert the text files to a list of str
 Once you have a tokenizer, just initialize a streamer and write the VW file.
 
 ```python
+from declass.utils.streamers import TextFileStreamer
+from declass.utils.text_processors import TokenizerBasic
+
+my_tokenizer = TokenizerBasic()
 stream = TextFileStreamer(text_base_path='bodyfiles', tokenizer=my_tokenizer)
 stream.to_vw('doc_tokens.vw', n_jobs=-1)
 ```
@@ -26,7 +35,6 @@ stream.to_vw('doc_tokens.vw', n_jobs=-1)
 ### Method 2: `files_to_vw.py`
 `files_to_vw.py` is a fast and simple command line utility for converting files to VW format.
 
-* Clone the [parallel easy][parallel_easy] module and put it in your `PYTHONPATH`.
 * Try converting the first 5 files in `my_base_path`.  The following should print 5 lines of of results, in [vw format][vwinput]
 
 ```bash
@@ -83,18 +91,23 @@ There are some issues with using the raw `prediction.dat` and `topics.dat` files
 ### Step 1:  Make an `SFileFilter`
 
 ```python
-sff = SFileFilter(text_processors.VWFormatter(), verbose=True)
+from declass.utils.text_processors import SFileFilter, VWFormatter
+sff = SFileFilter(VWFormatter())
 sff.load_sfile('doc_tokens.vw')
+
 df = sff.to_frame()
 df.head()
 df.describe()
+
 sff.filter_extremes(doc_freq_min=5, doc_fraction_max=0.8)
+sff.compactify()
 sff.save('sff_file.pkl')
 ```
 
 * `.to_frame()` returns a DataFrame representation that is useful for deciding which tokens to filter.
 * `.filter_extremes` removes low/high frequency tokens from our filter's internal dictionaries.  It's just like those tokens were never present in the original text.
-* `.save` first sets the inverse mapping, `self.id2token`, then saves to disk.  To set the inverse mappin, we first resolve collisions by changing the id values for tokens that collide.  Note that if we didn't filter extreme tokens before resolving collisions, then we would have many tokens in our vocab, and there is a good chance the collisions would not be able to be resolved!
+* `.compactify` removes "gaps" in the sequence of numbers (ids) in `self.token2id`.  Once you have done this, the `ids` used by your filter will be the numbers 0 to V-1 where V is the total vocabulary size (= `sff.vocab_size`) rather than 0 to 2^b - 1.  This is often a much lower number (= `sff.bit_precision_required`).
+* `.save` first sets the inverse mapping, `self.id2token`, then saves to disk.  To set the inverse mapping, we first resolve collisions by changing the id values for tokens that collide.  Note that if we didn't filter extreme tokens before resolving collisions, then we would have many tokens in our vocab, and there is a good chance the collisions would not be able to be resolved!
 
 ### Step 2a:  Run VW on filtered output
 First save a "filtered" version of `doc_tokens.vw`.
@@ -102,7 +115,7 @@ First save a "filtered" version of `doc_tokens.vw`.
 ```python
 sff.filter_sfile('doc_tokens.vw', 'doc_tokens_filtered.vw')
 ```
-Our filtered output, `doc_tokens_filtered.vw` has replaced tokens with the id values that the `sff` chose.  This forces `vw` to use the values we chose (VW's hasher maps integers to integers, modulo `2^bit_precision`).  Since we saved our filter with `.save`, we will have access to both the `token2id` and `id2token` mappings.  We can also filter based on `doc_id` as follows
+Our filtered output, `doc_tokens_filtered.vw` has replaced tokens with the id values that the `sff` chose.  This forces VW to use the values we chose (VW's hasher maps integers to integers, modulo `2^bit_precision`).  We can also filter based on `doc_id` as follows
 
 ```python
 meta = pd.read_csv('path_to_metadata.csv')
@@ -111,13 +124,13 @@ sff.filter_sfile(
     'doc_tokens.vw', 'doc_tokens_filtered.vw', doc_id_list=doc_id_to_keep)
 ```
 
-Now run `vw`.
+Now run VW.
 
 ```
 rm -f *cache
 vw --lda 5 --cache_file ddrs.cache --passes 10 -p prediction.dat --readable_model topics.dat --bit_precision 16 doc_tokens_filtered.vw
 ```
-It is very important that the bit precision for vw, set with `--bit_precision 16` is greater than or equal to `sff.bit_precision_required`.  If you don't then the hash values used by `vw` will not match up with the tokens stored in `sff.id2token`.
+It is very important that the bit precision for VW, set with `--bit_precision 16` is greater than or equal to `sff.bit_precision_required`.  If you don't then the hash values used by VW will not match up with the tokens stored in `sff.id2token`.
 
 
 ### Step 2b:  Filter "on the fly" using a saved `sff`
@@ -128,13 +141,14 @@ rm -f *cache
 python $DECLASS/cmd/filter_sfile.py -s sff_file.pkl  doc_tokens.vw  \
     | vw --lda 5 --cache_file ddrs.cache --passes 10 -p prediction.dat --readable_model topics.dat --bit_precision 16
 ```
-The python function `filter_sfile.py` takes in `ddrs.vw` and streams a filtered sfile to stdout.  The `|` connects `vw` to this stream.  Notice we no longer specify an input file to `vw` (previously we passed it a `doc_tokens_filtered.vw` positional argument).
+The python function `filter_sfile.py` takes in `ddrs.vw` and streams a filtered sfile to stdout.  The `|` connects VW to this stream.  Notice we no longer specify an input file to VW (previously we passed it a `doc_tokens_filtered.vw` positional argument).
 
 ### Step 3:  Read the results with `LDAResults`
 
 You can view the topics and predictions with this:
 
 ```python
+from declass.utils.vw_helpers import LDAResults
 num_topics = 5
 lda = LDAResults('topics.dat', 'prediction.dat', num_topics, 'sff_file.pkl')
 lda.print_topics()
@@ -147,6 +161,9 @@ Since these structures are Pandas Series/DataFrames, you can access them with th
 ```python
 # Print P[token=kennedy | topic]
 lda.pr_token_g_topic.kennedy
+
+# Print P[token=kennedy | topic=topic_0]
+lda.pr_token_g_topic['kennedy']['topic_0']
 
 # Print P[token=war]
 lda.pr_token.war
