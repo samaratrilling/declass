@@ -41,8 +41,8 @@ for rec in records:
     with open(filepath, 'w') as f:
         f.write(rec['body'])
 
+    meta['doc_id'].append(doc_id)
     for field in ['time', 'names', 'year', 'subject']:
-        meta['doc_id'] = doc_id
         meta[field].append(rec[field])
 
 meta = pd.DataFrame(meta)

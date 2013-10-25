@@ -41,7 +41,6 @@ stream.to_vw('doc_tokens.vw', n_jobs=-1)
 find my_base_path -type f | head -n 5 | python $DECLASS/cmd/files_to_vw.py
 ```
 
-
 Convert the entire directory quickly.
 
 ```bash
