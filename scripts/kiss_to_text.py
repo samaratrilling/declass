@@ -32,7 +32,9 @@ records = dbCon.run_query('select * from Kissinger;')
 
 
 # Write records to disk
-meta = {'doc_id': [], 'time': [], 'names': [], 'year': [], 'subject': []}
+meta = {
+    'doc_id': [], 'time': [], 'names': [], 'year': [], 'subject': [],
+    'date': []}
 
 for rec in records:
     doc_id = rec['doc_id']
@@ -42,7 +44,7 @@ for rec in records:
         f.write(rec['body'])
 
     meta['doc_id'].append(doc_id)
-    for field in ['time', 'names', 'year', 'subject']:
+    for field in ['time', 'names', 'year', 'subject', 'date']:
         meta[field].append(rec[field])
 
 meta = pd.DataFrame(meta)

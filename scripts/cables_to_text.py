@@ -40,6 +40,7 @@ records = dbCon.run_query(
 meta = {f: [] for f in meta_fields}
 meta['doc_id'] = []
 
+
 for rec in records:
     doc_id = rec['doc_nbr'].replace(' ', '_')
     # Write the body text

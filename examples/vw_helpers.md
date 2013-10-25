@@ -117,7 +117,7 @@ sff.filter_sfile('doc_tokens.vw', 'doc_tokens_filtered.vw')
 Our filtered output, `doc_tokens_filtered.vw` has replaced tokens with the id values that the `sff` chose.  This forces VW to use the values we chose (VW's hasher maps integers to integers, modulo `2^bit_precision`).  We can also filter based on `doc_id` as follows
 
 ```python
-meta = pd.read_csv('path_to_metadata.csv')
+meta = pd.read_csv('path_to_metadata.csv').set_index('doc_id')
 doc_id_to_keep = meta[meta['administration'] == 'Nixon'].index
 sff.filter_sfile(
     'doc_tokens.vw', 'doc_tokens_filtered.vw', doc_id_list=doc_id_to_keep)
