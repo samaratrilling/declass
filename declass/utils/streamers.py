@@ -287,17 +287,26 @@ class TextFileStreamer(BaseStreamer):
             will dominate.  If this is too high, jobs will not be distributed
             evenly.
         """
+        # Note:  This is similar to declass/cmd/files_to_vw.py
+        # This implementation is more complicated, due to the fact that a
+        # streamer specifies the method to extract doc_id from a stream.
+        # To be faithful to the streamer, we must therefore use the streamer
+        # to stream the files.  This requires a combination of imap_easy and
+        # a chunker.
+        #
         # Create an iterator over chunks of paths
         path_group_iter = common.grouper(self.paths, chunksize)
 
         formatter = text_processors.VWFormatter()
 
         func = partial(_group_to_sstr, self, formatter)
+        # Process one group at a time...set imap_easy chunksize arg to 1
+        # since each group contains many paths.
         results_iterator = imap_easy(func, path_group_iter, n_jobs, 1)
 
         with smart_open(outfile, 'w') as open_outfile:
-            for sstr_group in results_iterator:
-                for sstr in sstr_group:
+            for group_results in results_iterator:
+                for sstr in group_results:
                     open_outfile.write(sstr + '\n')
 
 
