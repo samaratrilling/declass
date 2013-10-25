@@ -11,7 +11,7 @@ import MySQLdb
 from functools import partial
 from urllib import ContentTooShortError
 from pymysql import ProgrammingError
-from time import localtime
+from time import localtime, strftime
 
 from parallel_easy.base import imap_easy, map_easy
 from declass.utils.filefilter import get_paths
@@ -19,6 +19,7 @@ from declass.utils.filefilter import get_paths
 
 ####yaml file containing login data
 login_file = os.getenv("HOME") + '/.declass_db'
+col_to_json_dict = {'subject': 'subject', 'date': 'docDate', 'year': 'docDate', 'doc_id': 'pdfLink'}
 
 def get_data(master_url, master_load_path=None, master_save_path=None,
         MYDATA_dir=None, n_jobs=7, chunksize=100):
@@ -62,8 +63,7 @@ def push_data(master_url, master_load_path=None, master_save_path=None,
     update_table(results_json, cursor)
 
 
-#TODO: consolidata update functions
-def update_names_time(master_url, master_load_path=None, master_save_path=None,
+def update_column(master_url, col_name, master_load_path=None, master_save_path=None,
         table_name='Kissinger', MYDATA_dir=None, 
         fails_file='/tmp/Kissinger_fails.txt', limit=None):
     master_json = get_master_json(master_url, master_load_path, master_save_path)
@@ -71,18 +71,20 @@ def update_names_time(master_url, master_load_path=None, master_save_path=None,
     results_json = results_json[:limit]
     cursor = connect_db()
     for i, result in enumerate(results_json):
-        _update_names_time(result, cursor, table_name, MYDATA_dir,
+        _update(col_name, result, cursor, table_name, MYDATA_dir,
                 fails_file)
         if i%100==0: 
             print 'done with %s documents'%i
 
-    
-def _update_names_time(doc_data, db_cursor, table_name, MYDATA_dir,
+
+def _update(col_name, doc_data, db_cursor, table_name, MYDATA_dir,
         fails_file):
-    doc_id = parse_doc_id(doc_data)
-    subj = parse_subject(doc_data)
-    sql = 'UPDATE %s SET names = "%s", time = "%s" where doc_id = "%s";'%(
-            table_name,  subj['names'], subj['time'], doc_id)
+    id_field = col_to_json_dict['doc_id']
+    id_data = doc_data[id_field]
+    doc_id = _parse_doc_id(id_data)
+    value = parse_data(doc_data, col_name) 
+    sql = 'UPDATE %s SET %s = "%s" where doc_id = "%s";'%(
+            table_name, col_name, value, doc_id)
     ff = open(fails_file, 'w')
     try:
         db_cursor.execute(sql)
@@ -91,35 +93,61 @@ def _update_names_time(doc_data, db_cursor, table_name, MYDATA_dir,
         print doc_id
     ff.close()
 
+def parse_data(doc_data, col_name):
+    field_name = col_to_json_dict[col_name]
+    data = doc_data[field_name]
+    parse_func = globals()['_parse_%s'%col_name]
+    return parse_func(data)  
 
-def update_subject(master_url, master_load_path=None, master_save_path=None,
-        table_name='Kissinger', MYDATA_dir=None, 
-        fails_file='/tmp/Kissinger_fails.txt', limit=None):
-    master_json = get_master_json(master_url, master_load_path, master_save_path)
-    results_json = master_json['Results']
-    results_json = results_json[3800:]
-    cursor = connect_db()
-    for i, result in enumerate(results_json):
-        _update_subject(result, cursor, table_name, MYDATA_dir,
-                fails_file)
-        if i%100==0: 
-            print 'done with %s documents'%i
-
-    
-
-def _update_subject(doc_data, db_cursor, table_name, MYDATA_dir,
-        fails_file):
-    doc_id = parse_doc_id(doc_data)
-    subj = doc_data['subject']
-    sql = 'UPDATE %s SET subject = "%s" where doc_id = "%s";'%(
-            table_name,  subj, doc_id)
-    ff = open(fails_file, 'w')
+def _parse_date(data):
+    s = re.search(r'\((\d*)\)', data)
     try:
-        db_cursor.execute(sql)
-    except ProgrammingError:
-        ff.writeline(doc_id)
-        print doc_id
-    ff.close()
+        sec_string = s.group(1)
+    except AttributeError:
+        return None
+    sec_epoch = int(sec_string[:-3])
+    local = localtime(sec_epoch)
+    return strftime('%Y-%m-%d', local)
+
+def _parse_doc_id(data):
+    doc = data.split('\\')[2]
+    doc_id = doc.split('.')[0]
+    return doc_id
+
+def _parse_time(subject):
+    return _parse_names_time(subject)['time']
+
+def _parse_names(subject):
+    return _parse_names_time(subject)['names']
+
+def _parse_names_time(subject):
+    s = re.search(
+            r'(WITH|with) {,1}(.*) (AT|at) ([\d:]* [APap]\.[Mm]\.|)', 
+            subject)
+    try:
+        names = s.group(2)
+        time = s.group(4)
+    except AttributeError:
+        s = re.search(r'(WITH|with) ([A-Z\s\.].*)$', subject)
+        try:
+            names = s.group(2)
+            time = None
+        except AttributeError:
+            names = time = None
+            print subject
+    return {'names': names, 'time': time}
+
+def _parse_year(data):
+    s = re.search(r'\((\d*)\)', data)
+    try:
+        sec_string = s.group(1)
+    except AttributeError:
+        return None
+    sec_epoch = int(sec_string[:-3])
+    return localtime(sec_epoch).tm_year
+
+def _parse_subject(data):
+    return data
 
 
 
@@ -155,43 +183,6 @@ def _clean_string(string):
     """
     string = re.sub(r'(new {,1}Date\(-{,1}\d*\))', r'"\g<0>"', string)
     return string
-
-
-def parse_subject(doc_data):
-    subject = doc_data['subject']
-    s = re.search(
-            r'(WITH|with) {,1}(.*) (AT|at) ([\d:]* [APap]\.[Mm]\.|)', 
-            subject)
-    try:
-        names = s.group(2)
-        time = s.group(4)
-    except AttributeError:
-        s = re.search(r'(WITH|with) ([A-Z\s\.].*)$', subject)
-        try:
-            names = s.group(2)
-            time = None
-        except AttributeError:
-            names = time = None
-            print subject
-    return {'names': names, 'time': time}
-
-
-def parse_doc_id(doc_data):
-    url_string = doc_data['pdfLink']
-    doc = url_string.split('\\')[2]
-    doc_id = doc.split('.')[0]
-    return doc_id
-
-
-def parse_year(doc_data):
-    docDate = doc_data['docDate']
-    s = re.search(r'\((\d*)\)', docDate)
-    try:
-        sec_string = s.group(1)
-    except AttributeError:
-        return None
-    sec_epoch = int(sec_string[:-3])
-    return localtime(sec_epoch).tm_year
 
 
 def parse_file_urls(results_json, master_url=('http://foia.state.gov/searchapp/'
@@ -351,7 +342,7 @@ if __name__ == "__main__":
     master_path = os.path.join(MYDATA, 'master_doc_data.json')
     #get_data(master_url, master_load_path=master_path)
     #push_data(master_url, master_load_path=master_path)
-    update_subject(master_url, master_load_path=master_path, limit=None)
+    update_column(master_url, 'date',  master_load_path=master_path, limit=None)
 
 
     
