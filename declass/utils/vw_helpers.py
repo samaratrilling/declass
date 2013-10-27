@@ -126,7 +126,7 @@ def find_start_line_lda_predictions(predictions_file, num_topics):
         for line_num, line in enumerate(open_file):
             split_line = line.split()
             # Currently only deal with topics + a doc_id
-            assert len(split_line) == num_topics + 1
+            assert len(split_line) == num_topics + 1, "Is num_topics correct?"
             doc_id = split_line[-1]
             if line_num == 0:
                 first_doc_id = doc_id
@@ -266,9 +266,10 @@ class LDAResults(object):
         header = " Printing top %d tokens in every topic" % topn
         outstr = "=" * 10 + header + "=" * 10
 
-        for topic_name in self.pr_topic_token.columns:
-            outstr += '\n' + "-" * 30 + '\n%s' % topic_name
-            sorted_topic = self.pr_topic_token[topic_name].order(
+        for topic_name in self.pr_topic.index:
+            outstr += ('\n' + "-" * 30 + '\nTopic name: %s.  P[%s] = %.4f' 
+                % (topic_name, topic_name, self.pr_topic[topic_name]))
+            sorted_topic = self.pr_token_g_topic.loc[topic_name].order(
                 ascending=False)
             outstr += "\n" + sorted_topic.head(topn).to_string() + "\n"
         
