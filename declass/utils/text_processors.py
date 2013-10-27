@@ -138,18 +138,11 @@ class SparseFormatter(object):
         assert feature_str[0] == ' '
         feature_str = feature_str[1:]
 
-        feature_values = {}
-        feature_values_list = feature_str.split()
-        for fv in feature_values_list:
-            feature, value = fv.split(':')
-            # If the feature is an int, then store an int.  If float...
-            # If no value, default to 1
-            if value:
-                value_to_use = self._string_to_number(value)
-            else:
-                value_to_use = 1
+        # The regex splits 'hi:1 bye:' into [('hi', '1'), ('bye', '')]
+        fv_list = re.findall(r'(\S+):(\S*)', feature_str)
 
-            feature_values[feature] =  value_to_use
+        feature_values = {
+            f: self._string_to_number(v, empty_sub=1) for (f, v) in fv_list}
 
         return feature_values
 
@@ -257,13 +250,23 @@ class SparseFormatter(object):
                     raise StopIteration
                 yield self.sstr_to_token_list(line)
 
-    def _string_to_number(self, string):
+    def _string_to_number(self, string, empty_sub=None):
+        """
+        Convert a string to either an int or a float, with optional
+        substitution for empty strings.
+        """
         try:
-            number = int(string)
+            return int(string)
         except ValueError:
-            number = float(string)
-
-        return number
+            pass  # fallback to float
+        try:
+            return float(string)
+        except ValueError:
+            # See if it is empty and there is an empty_sub value
+            if (string == '') and (empty_sub is not None):
+                return empty_sub 
+            else:
+                raise
 
 
 class VWFormatter(SparseFormatter):
@@ -426,7 +429,7 @@ class SFileFilter(SaveLoad):
     """
     Filters results stored in sfiles (sparsely formattted bag-of-words files).
     """
-    def __init__(self, formatter, bit_precision=16, verbose=True):
+    def __init__(self, formatter, bit_precision=18, verbose=True):
         """
         Parameters
         ----------

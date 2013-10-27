@@ -31,9 +31,9 @@ class TestSparseFormatter(unittest.TestCase):
         self.formatter = text_processors.SparseFormatter()
 
     def test_parse_feature_str(self):
-        feature_str = ' hi:1 bye:2.2 what:3'
+        feature_str = ' hi:1 bye:2.2 what:3 is:'
         feature_values = self.formatter._parse_feature_str(feature_str)
-        benchmark = {'hi': 1, 'bye': 2.2, 'what': 3}
+        benchmark = {'hi': 1, 'bye': 2.2, 'what': 3, 'is': 1}
         self.assertEqual(feature_values, benchmark)
 
 
@@ -116,7 +116,7 @@ class TestSFileFilter(unittest.TestCase):
         self.outfile = StringIO()
         formatter = text_processors.VWFormatter()
         self.sff = text_processors.SFileFilter(
-            formatter, bit_precision=20)
+            formatter, bit_precision=20, verbose=False)
         self.hash_fun = self.sff._get_hash_fun()
     
     @property
