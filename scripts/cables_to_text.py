@@ -13,7 +13,7 @@ from declass.utils.database import DBCONNECT
 # You should have your own login_file somewhere.  
 # DO NOT commit this to the (public) repository!
 login_file = os.path.join('/home/langmore/lib/declass/', 'conf', 'db_login.yml')
-RAW = os.path.join(os.getenv('DATA'), os.getenv('ME'), 'cables-01/raw')
+RAW = os.path.join(os.getenv('DATA'), os.getenv('ME'), 'cables-full-01/raw')
 bodyfiles_basepath = os.path.join(RAW, 'bodyfiles')
 metafile_path = os.path.join(RAW, 'meta', 'meta.csv')
 
@@ -39,18 +39,26 @@ records = dbCon.run_query(
 # Write records to disk
 meta = {f: [] for f in meta_fields}
 meta['doc_id'] = []
+meta['has_text'] = []
 
 
 for rec in records:
     doc_id = rec['doc_nbr'].replace(' ', '_')
-    # Write the body text
-    filepath = os.path.join(bodyfiles_basepath, doc_id + '.txt')
-    with open(filepath, 'w') as f:
-        f.write(rec['msgtext'])
 
+    # Append meta
     meta['doc_id'].append(doc_id)
     for field in meta_fields:
         meta[field].append(rec[field])
+
+    # Write the body text
+    if rec['msgtext']:
+        filepath = os.path.join(bodyfiles_basepath, doc_id + '.txt')
+        with open(filepath, 'w') as f:
+            f.write(rec['msgtext'])
+        meta['has_text'] = 1
+    else:
+        meta['has_text'] = 0
+
 
 meta = pd.DataFrame(meta)
 meta.to_csv(metafile_path, sep='|', index=False)

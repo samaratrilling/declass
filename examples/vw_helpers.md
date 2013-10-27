@@ -73,7 +73,7 @@ Quick test of VW on this `sfile`
 
 * The call `vw --lda 5` means run LDA and use 5 topics.
 * The `--cache_file` option means "during the first pass, convert the input to a binary 'cached' format and use that for subsequent results.  The `rm -f *cache` is important since if you don't erase the cache file, `VW` will re-use the old one, even if you specify a new input file!
-* The `--bit_precision 16` option means: "Use 16 bits of precision" when [hashing][hashing] tokens.  This will cause many collisions but won't effect the results much at all.  Vowpal Wabbit is *very* sensitive to bit precision!  If you make it bigger, you need many more passes to get decent results.
+* The `--bit_precision 16` option means: "Use 16 bits of precision" when [hashing][hashing] tokens.  This will cause many collisions but won't effect the results much at all.
 * See [this slideshow][vwlda] about LDA in VW, and [this slideshow][vwtricks] for some VW technical tricks.
 
 This produces two files:
@@ -133,7 +133,7 @@ It is very important that the bit precision for VW, set with `--bit_precision 16
 
 
 ### Step 2b:  Filter "on the fly" using a saved `sff`
-The workflow in step 2a requires making the intermediate file `doc_tokens_filtered.vw`.  Keeping track of all these filtered outputs is an issue.  Since you already need to keep track of a saved sff, you might as well use that as your [one and only one][spot] reference.
+The workflow in step 2a requires making the intermediate file `doc_tokens_filtered.vw`.  Keeping track of all these filtered outputs is an issue.  If you already need to keep track of a saved sff, you might as well use that as your [one and only one][spot] reference.
 
 ```
 rm -f *cache
