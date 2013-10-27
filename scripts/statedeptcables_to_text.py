@@ -55,9 +55,9 @@ for rec in records:
         filepath = os.path.join(bodyfiles_basepath, doc_id + '.txt')
         with open(filepath, 'w') as f:
             f.write(rec['msgtext'])
-        meta['has_text'] = 1
+        meta['has_text'].append(1)
     else:
-        meta['has_text'] = 0
+        meta['has_text'].append(0)
 
 
 meta = pd.DataFrame(meta)

@@ -598,6 +598,9 @@ class SFileFilter(SaveLoad):
         """
         Sets self.bit_precision_required to the minimum bit precision b such
         that all token id values are less than 2^b.
+
+        The idea is that only compactification can change this, so we only
+        (automatically) call this after compactification.
         """
         max_id = np.max(self.token2id.values())
 
@@ -747,6 +750,7 @@ class SFileFilter(SaveLoad):
             {'token_score': [token_score[tok] for tok in token2id],
              'doc_freq': [doc_freq[tok] for tok in token2id]},
             index=[tok for tok in token2id])
+        frame['doc_fraction'] = frame.doc_freq / float(self.num_docs)
         frame.index.name = 'token'
 
         return frame
