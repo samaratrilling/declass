@@ -254,16 +254,16 @@ class LDAResults(object):
     def pr_topic_g_doc(self):
         return self.pr_topic_doc.div(self.pr_doc, axis=0)
 
-    def print_topics(self, topn=5, outfile=sys.stdout):
+    def print_topics(self, num_words=5, outfile=sys.stdout):
         """
         Print the top results for self.pr_token_g_topic for all topics
 
         Parameters
         ----------
-        topn : Integer
-            Print the topn words (ordered by P[w|topic]) in each topic.
+        num_words : Integer
+            Print the num_words words (ordered by P[w|topic]) in each topic.
         """
-        header = " Printing top %d tokens in every topic" % topn
+        header = " Printing top %d tokens in every topic" % num_words
         outstr = "=" * 10 + header + "=" * 10
 
         for topic_name in self.pr_topic.index:
@@ -271,7 +271,7 @@ class LDAResults(object):
                 % (topic_name, topic_name, self.pr_topic[topic_name]))
             sorted_topic = self.pr_token_g_topic.loc[topic_name].order(
                 ascending=False)
-            outstr += "\n" + sorted_topic.head(topn).to_string() + "\n"
+            outstr += "\n" + sorted_topic.head(num_words).to_string() + "\n"
         
         outfile.write(outstr)
 

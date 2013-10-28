@@ -69,7 +69,7 @@ Quick test of VW on this `sfile`
 --------------------------------
 
     rm -f *cache
-    vw --lda 5 --cache_file doc_tokens.cache --passes 10 -p prediction.dat --readable_model topics.dat --bit_precision 16 --lda_D $(wc -l doc_tokens.vw | cut -d' ' -f1) --lda_rho 0.1 --lda_alpha 1 doc_tokens.vw
+    vw --lda 5 --cache_file doc_tokens.cache --passes 10 -p prediction.dat --readable_model topics.dat --bit_precision 16 --lda_D 10000 --lda_rho 0.1 --lda_alpha 1 doc_tokens.vw
 
 * The call `vw --lda 5` means run LDA and use 5 topics.
 * The final argument, `doc_tokens.vw` is our input file.  Alternatively this could be piped in.
@@ -78,7 +78,7 @@ Quick test of VW on this `sfile`
 * `-p prediction.dat` stores the predictions (topic weights for each doc) in the file `prediction.dat`
 * `--readable_model topics.dat` stores the word-topic weights in the file `topics.dat`
 * The `--bit_precision 16` option means: "Use 16 bits of precision" when [hashing][hashing] tokens.  This will cause many collisions but won't effect the results much at all.
-* `--lda_D 100` means, "we will see 100 unique documents."  `--lda_D $(wc -l doc_tokens.vw | cut -d' ' -f1)` says, "the number of unique documents we will see is the same as the number of lines in the file `doc_tokens.vw`.  If this is too low, the prior has too much of an effect.  If this is too high, the prior does nothing.
+* `--lda_D 10000` means, "we will see 10000 unique documents."  If this is too low, the prior has too much of an effect.  If this is too high, the prior does nothing.
 * `--lda_rho` is the prior parameter controlling word probabilities (== 1 if you expect a flat distribution of words).  We set it to 0.1 since most words appear not very often.
 * `--lda_alpha` is the prior parameter controlling topic probabilities (== 1 if you expect a flat distribution of topics).
 * See [this slideshow][vwlda] about LDA in VW, and [this slideshow][vwtricks] for some VW technical tricks.
